@@ -1,5 +1,8 @@
 import logging
+from pathlib import Path
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base, SessionLocal
@@ -51,16 +54,30 @@ app.include_router(reports_router)
 app.include_router(analytics_router)
 app.include_router(websocket_router)
 
-@app.get("/")
-def root():
+@app.get("/api/health")
+def health():
+    return {"status": "healthy"}
+
+# Mount frontend production dist if built
+frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if (frontend_dist / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
+
+@app.get("/{full_path:path}")
+def serve_spa(full_path: str):
+    # Check if a specific file exists in dist
+    file_path = frontend_dist / full_path
+    if full_path and file_path.is_file():
+        return FileResponse(file_path)
+    
+    # Return index.html for SPA client-side routes (/jobs, /recruiter, /candidate, etc.)
+    index_file = frontend_dist / "index.html"
+    if index_file.is_file():
+        return FileResponse(index_file)
+    
     return {
         "platform": settings.PROJECT_NAME,
         "version": settings.PROJECT_VERSION,
         "status": "online",
-        "description": settings.DESCRIPTION,
         "docs_url": "/docs"
     }
-
-@app.get("/api/health")
-def health():
-    return {"status": "healthy"}

@@ -1,0 +1,18 @@
+services:
+  # Unified Full-Stack Service (FastAPI + React Frontend)
+  - type: web
+    name: aihire
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///./aihire.db
+      - key: PYTHONPATH
+        value: .
+      - key: PYTHON_VERSION
+        value: 3.11.9

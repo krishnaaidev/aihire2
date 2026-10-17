@@ -123,5 +123,26 @@ AIHire2/
 
 ---
 
+## 🌐 Deploy to a Live Website (1-Click via GitHub)
+
+### Method 1: Deploy Full-Stack on Render (Free, 2 Minutes)
+1. Go to **[Render.com](https://dashboard.render.com/)** and sign in with GitHub.
+2. Click **New +** > **Blueprint** (or **Web Service**).
+3. Connect your repository: `https://github.com/krishnaaidev/aihire2`.
+4. Render will automatically detect [`render.yaml`](render.yaml):
+   - **Build Command:** `./build.sh` (builds the React frontend and installs Python backend)
+   - **Start Command:** `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+5. Click **Apply / Create**.
+6. Render will build and launch your live website on a public URL: `https://aihire.onrender.com`!
+
+### Method 2: Deploy Frontend on Vercel
+1. Go to **[Vercel.com](https://vercel.com/)** and log in with GitHub.
+2. Click **Add New...** > **Project** and select `aihire2`.
+3. Vercel automatically uses [`vercel.json`](vercel.json).
+4. Click **Deploy**. Your frontend is live instantly at `https://aihire2.vercel.app`.
+
+---
+
 ## 🛡️ Limitations and Ethical Considerations (Synopsis Section 17)
 AIHire is engineered as a **decision-support platform**, not an autonomous hiring authority. Final hiring decisions, shortlisting, and candidate communications remain under qualified human supervisor review.
+
