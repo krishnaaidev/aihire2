@@ -11,10 +11,8 @@ import {
   Sparkles,
   BookOpen,
   Briefcase,
-  Award,
-  Cloud
+  Award
 } from 'lucide-react';
-import { isFirebaseConfigured, uploadResumeToFirebase } from '../services/firebase';
 
 export default function ResumeUploadPage() {
   const navigate = useNavigate();
@@ -23,8 +21,6 @@ export default function ResumeUploadPage() {
   const [uploading, setUploading] = useState(false);
   const [parsedProfile, setParsedProfile] = useState(null);
   const [error, setError] = useState('');
-  const [firebaseUploadProgress, setFirebaseUploadProgress] = useState(null);
-  const [firebaseStorageUrl, setFirebaseStorageUrl] = useState('');
 
   const sampleResumeText = `Suman Krishna
 Email: candidate@aihire.com | Phone: +91 98765 43210
@@ -65,20 +61,8 @@ AIHire: Autonomous AI Interview & Intelligent Evaluation Platform
 
     setError('');
     setUploading(true);
-    setFirebaseUploadProgress(null);
 
     try {
-      if (isFirebaseConfigured) {
-        try {
-          const { downloadUrl } = await uploadResumeToFirebase(file, 'candidates', (pct) => {
-            setFirebaseUploadProgress(pct);
-          });
-          setFirebaseStorageUrl(downloadUrl);
-        } catch (fbErr) {
-          console.warn('Firebase Storage upload notice:', fbErr.message);
-        }
-      }
-
       const res = await candidatesApi.uploadResume(file);
       setParsedProfile(res);
     } catch (err) {
@@ -91,23 +75,10 @@ AIHire: Autonomous AI Interview & Intelligent Evaluation Platform
   const handleUseSampleResume = async () => {
     setError('');
     setUploading(true);
-    setFirebaseUploadProgress(null);
 
     try {
       const blob = new Blob([sampleResumeText], { type: 'text/plain' });
       const sampleFile = new File([blob], 'suman_krishna_resume.txt', { type: 'text/plain' });
-
-      if (isFirebaseConfigured) {
-        try {
-          const { downloadUrl } = await uploadResumeToFirebase(sampleFile, 'candidates', (pct) => {
-            setFirebaseUploadProgress(pct);
-          });
-          setFirebaseStorageUrl(downloadUrl);
-        } catch (fbErr) {
-          console.warn('Firebase Storage upload notice:', fbErr.message);
-        }
-      }
-
       const res = await candidatesApi.uploadResume(sampleFile);
       setParsedProfile(res);
     } catch (err) {
@@ -172,24 +143,6 @@ AIHire: Autonomous AI Interview & Intelligent Evaluation Platform
             </label>
           </div>
 
-          {firebaseUploadProgress !== null && (
-            <div className="space-y-1.5 p-3 rounded-xl bg-slate-900/80 border border-cyan-500/30">
-              <div className="flex justify-between text-[11px] text-cyan-300 font-medium">
-                <span className="flex items-center gap-1.5">
-                  <Cloud className="w-3.5 h-3.5 animate-pulse" />
-                  Uploading to Firebase Cloud Storage...
-                </span>
-                <span>{firebaseUploadProgress}%</span>
-              </div>
-              <div className="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-200"
-                  style={{ width: `${firebaseUploadProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
-
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <button
               type="button"
@@ -224,18 +177,7 @@ AIHire: Autonomous AI Interview & Intelligent Evaluation Platform
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">Resume Processed Successfully!</h3>
-                <p className="text-xs text-slate-400">Review structured attributes extracted by the NLP parser</p>
-                {firebaseStorageUrl && (
-                  <a
-                    href={firebaseStorageUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 mt-1"
-                  >
-                    <Cloud className="w-3 h-3" />
-                    Stored in Firebase Cloud Storage (View PDF)
-                  </a>
-                )}
+                <p className="text-xs text-slate-400">Stored securely on server and analyzed by NLP parser</p>
               </div>
             </div>
             <button

@@ -8,19 +8,12 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged
 } from 'firebase/auth';
-import { 
-  getStorage, 
-  ref, 
-  uploadBytesResumable, 
-  getDownloadURL 
-} from 'firebase/storage';
 
-// Firebase configuration for aihire-platform (from Firebase Console)
+// Firebase configuration for aihire-platform (Authentication only)
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCg4lPI2EpeN5rn66dyOonXbH4cMDN7758",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "aihire-platform.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "aihire-platform",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "aihire-platform.firebasestorage.app",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "160949664281",
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:160949664281:web:da9fd1dcd81190fe280888",
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-D2NC5ER8LM"
@@ -41,9 +34,6 @@ export const app = getApps().length > 0
 // Firebase Authentication instance
 export const auth = getAuth(app);
 
-// Firebase Cloud Storage instance
-export const storage = getStorage(app);
-
 // Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
@@ -53,7 +43,7 @@ googleProvider.setCustomParameters({ prompt: 'select_account' });
  */
 export async function firebaseSignIn(email, password) {
   if (!isFirebaseConfigured) {
-    throw new Error('Firebase is not yet configured. Please set VITE_FIREBASE_API_KEY in your frontend/.env file.');
+    throw new Error('Firebase Authentication is not configured.');
   }
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
   const token = await userCredential.user.getIdToken();
@@ -65,7 +55,7 @@ export async function firebaseSignIn(email, password) {
  */
 export async function firebaseSignUp(email, password) {
   if (!isFirebaseConfigured) {
-    throw new Error('Firebase is not yet configured. Please set VITE_FIREBASE_API_KEY in your frontend/.env file.');
+    throw new Error('Firebase Authentication is not configured.');
   }
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const token = await userCredential.user.getIdToken();
@@ -77,7 +67,7 @@ export async function firebaseSignUp(email, password) {
  */
 export async function firebaseSignInWithGoogle() {
   if (!isFirebaseConfigured) {
-    throw new Error('Firebase is not yet configured. Please set VITE_FIREBASE_API_KEY in your frontend/.env file.');
+    throw new Error('Firebase Authentication is not configured.');
   }
   const result = await signInWithPopup(auth, googleProvider);
   const token = await result.user.getIdToken();
@@ -91,53 +81,4 @@ export async function firebaseSignOut() {
   if (isFirebaseConfigured) {
     await signOut(auth);
   }
-}
-
-/**
- * Upload resume directly to Firebase Cloud Storage bucket
- * @param {File} file - The resume PDF or text file
- * @param {string} candidateId - Unique candidate ID or email
- * @param {Function} onProgress - Progress callback receiving percent 0-100
- * @returns {Promise<{downloadUrl: string, storagePath: string}>}
- */
-export function uploadResumeToFirebase(file, candidateId = 'general', onProgress = () => {}) {
-  return new Promise((resolve, reject) => {
-    if (!isFirebaseConfigured) {
-      reject(new Error('Firebase Cloud Storage is not configured. Set VITE_FIREBASE_STORAGE_BUCKET in frontend/.env.'));
-      return;
-    }
-
-    const timestamp = Date.now();
-    const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storagePath = `resumes/${candidateId}/${timestamp}_${cleanFileName}`;
-    const storageRef = ref(storage, storagePath);
-
-    const uploadTask = uploadBytesResumable(storageRef, file, {
-      contentType: file.type || 'application/pdf',
-      customMetadata: {
-        candidateId: String(candidateId),
-        originalName: file.name,
-        uploadedAt: new Date().toISOString()
-      }
-    });
-
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        onProgress(Math.round(progress));
-      },
-      (error) => {
-        reject(error);
-      },
-      async () => {
-        try {
-          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          resolve({ downloadUrl, storagePath });
-        } catch (err) {
-          reject(err);
-        }
-      }
-    );
-  });
 }

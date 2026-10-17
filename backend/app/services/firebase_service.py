@@ -8,24 +8,21 @@ _firebase_initialized = False
 
 try:
     import firebase_admin
-    from firebase_admin import credentials, auth, storage
+    from firebase_admin import credentials, auth
     
     cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH")
-    storage_bucket = os.getenv("FIREBASE_STORAGE_BUCKET", "aihire-platform.firebasestorage.app")
     
     if cred_path and os.path.exists(cred_path):
         cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred, {
-            'storageBucket': storage_bucket
-        })
+        firebase_admin.initialize_app(cred)
         _firebase_initialized = True
-        logger.info(f"Firebase Admin SDK initialized successfully with credentials: {cred_path}")
+        logger.info(f"Firebase Admin SDK initialized successfully for Authentication: {cred_path}")
     elif os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
         firebase_admin.initialize_app()
         _firebase_initialized = True
-        logger.info("Firebase Admin SDK initialized with default application credentials")
+        logger.info("Firebase Admin SDK initialized with default application credentials for Authentication")
     else:
-        logger.info("Firebase Admin SDK available (credentials file not specified, running in local fallback mode)")
+        logger.info("Firebase Admin SDK available for Authentication (credentials file optional)")
 except Exception as e:
     logger.warning(f"Firebase Admin SDK could not be initialized: {e}")
 
@@ -45,14 +42,4 @@ def verify_firebase_id_token(id_token: str) -> Optional[Dict[str, Any]]:
         return decoded_token
     except Exception as e:
         logger.error(f"Error verifying Firebase ID token: {e}")
-        return None
-
-def get_firebase_bucket():
-    """Return default Firebase Cloud Storage bucket or None."""
-    if not _firebase_initialized:
-        return None
-    try:
-        return storage.bucket()
-    except Exception as e:
-        logger.error(f"Error accessing Firebase Storage bucket: {e}")
         return None
