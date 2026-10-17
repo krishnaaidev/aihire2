@@ -81,6 +81,49 @@ The database is seeded with **20 specialized recruiters** spanning 20 distinct t
 
 ---
 
+## 🔥 Firebase Console Integration (Authentication & Storage)
+
+AIHire supports **Firebase Console** for both enterprise authentication and cloud resume storage, operating seamlessly alongside the FastAPI backend.
+
+### 1. Features
+* **Firebase Authentication:**
+  * Email & Password sign-in / registration
+  * Google One-Click Sign-In with popup
+  * Secure Firebase ID token exchange & session preservation
+* **Firebase Cloud Storage:**
+  * Resume files (PDF/TXT) uploaded directly to Firebase Cloud Storage buckets (`resumes/{candidateId}/{timestamp}_{filename}`)
+  * Real-time upload progress tracking bar
+  * Direct secure download and review URLs for recruiters
+
+### 2. Connect Your Firebase Console (2 Minutes)
+1. Go to **[Firebase Console](https://console.firebase.google.com/)** and create a project (e.g. `aihire-platform`).
+2. **Enable Authentication:**
+   * In the left sidebar, click **Build** > **Authentication** > **Get Started**.
+   * Under the **Sign-in method** tab, enable **Email/Password** and **Google**.
+3. **Enable Cloud Storage:**
+   * In the left sidebar, click **Build** > **Storage** > **Get Started**.
+   * Start in standard or test mode and select your Cloud Storage region.
+4. **Register Web App & Copy Keys:**
+   * In **Project Settings** > **General**, scroll to **Your apps** and click the **Web (`</>`)** icon.
+   * Copy the configuration values and create/update `frontend/.env`:
+     ```env
+     VITE_FIREBASE_API_KEY=AIzaSy...
+     VITE_FIREBASE_AUTH_DOMAIN=aihire-platform.firebaseapp.com
+     VITE_FIREBASE_PROJECT_ID=aihire-platform
+     VITE_FIREBASE_STORAGE_BUCKET=aihire-platform.firebasestorage.app
+     VITE_FIREBASE_MESSAGING_SENDER_ID=1234567890
+     VITE_FIREBASE_APP_ID=1:1234567890:web:abcdef
+     ```
+5. *(Optional Backend Admin Verification)*:
+   * Under **Project Settings** > **Service accounts**, click **Generate new private key** and set the path in `backend/.env`:
+     ```env
+     FIREBASE_CREDENTIALS_PATH=backend/service-account.json
+     ```
+
+*(If Firebase keys are not set, AIHire automatically falls back to local JWT auth and local filesystem storage without crashing)*
+
+---
+
 ## 🧪 Testing Strategy (Synopsis Section 21)
 
 To run the automated backend test suite:
