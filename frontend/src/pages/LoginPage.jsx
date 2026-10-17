@@ -48,6 +48,10 @@ export default function LoginPage() {
         navigate('/candidate');
       }
     } catch (err) {
+      if (err.code === 'auth/popup-closed-by-user') {
+        // User closed the popup, do not show error
+        return;
+      }
       setError(err.message || 'Google sign-in failed');
     } finally {
       setSubmitting(false);

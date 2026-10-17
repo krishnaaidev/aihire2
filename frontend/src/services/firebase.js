@@ -11,7 +11,7 @@ import {
 
 // Firebase configuration for aihire-platform (Authentication only)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCg4lPI2EpeN5rn66dyOonXbH4cMDN7758",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCg4lpI2EpeN5rn66dyOonXbH4cMDN7758",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "aihire-platform.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "aihire-platform",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "160949664281",

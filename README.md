@@ -103,7 +103,7 @@ AIHire uses **Firebase Console** exclusively for secure user authentication, whi
 3. **Web App Configuration:**
    * Keys are already configured and active in `frontend/src/services/firebase.js` and `frontend/.env`:
      ```env
-     VITE_FIREBASE_API_KEY=AIzaSyCg4lPI2EpeN5rn66dyOonXbH4cMDN7758
+     VITE_FIREBASE_API_KEY=AIzaSyCg4lpI2EpeN5rn66dyOonXbH4cMDN7758
      VITE_FIREBASE_AUTH_DOMAIN=aihire-platform.firebaseapp.com
      VITE_FIREBASE_PROJECT_ID=aihire-platform
      VITE_FIREBASE_MESSAGING_SENDER_ID=160949664281
