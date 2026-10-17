@@ -15,14 +15,15 @@ import {
   getDownloadURL 
 } from 'firebase/storage';
 
-// Firebase configuration from Vite environment variables
+// Firebase configuration for aihire-platform (from Firebase Console)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCg4lPI2EpeN5rn66dyOonXbH4cMDN7758",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "aihire-platform.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "aihire-platform",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "aihire-platform.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "160949664281",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:160949664281:web:da9fd1dcd81190fe280888",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-D2NC5ER8LM"
 };
 
 // Check whether Firebase has valid configuration keys provided
@@ -35,14 +36,7 @@ export const isFirebaseConfigured = Boolean(
 // Initialize Firebase App singleton
 export const app = getApps().length > 0 
   ? getApp() 
-  : initializeApp(isFirebaseConfigured ? firebaseConfig : {
-      apiKey: "demo-api-key",
-      authDomain: "demo.firebaseapp.com",
-      projectId: "demo-project",
-      storageBucket: "demo.appspot.com",
-      messagingSenderId: "123456789",
-      appId: "1:123456789:web:demo"
-    });
+  : initializeApp(firebaseConfig);
 
 // Firebase Authentication instance
 export const auth = getAuth(app);

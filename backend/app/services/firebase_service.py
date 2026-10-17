@@ -11,13 +11,13 @@ try:
     from firebase_admin import credentials, auth, storage
     
     cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH")
-    storage_bucket = os.getenv("FIREBASE_STORAGE_BUCKET")
+    storage_bucket = os.getenv("FIREBASE_STORAGE_BUCKET", "aihire-platform.firebasestorage.app")
     
     if cred_path and os.path.exists(cred_path):
         cred = credentials.Certificate(cred_path)
         firebase_admin.initialize_app(cred, {
             'storageBucket': storage_bucket
-        } if storage_bucket else {})
+        })
         _firebase_initialized = True
         logger.info(f"Firebase Admin SDK initialized successfully with credentials: {cred_path}")
     elif os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
