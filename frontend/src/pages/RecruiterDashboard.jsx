@@ -236,136 +236,64 @@ export default function RecruiterDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/40">
-              
-              {/* Highlighted Seed Candidate 1 */}
-              <tr className="hover:bg-slate-700/20 transition-colors">
-                <td className="py-3.5 px-4">
-                  <input
-                    type="checkbox"
-                    checked={selectedCandidateIds.includes(1)}
-                    onChange={() => toggleCandidateSelect(1)}
-                    className="w-4 h-4 rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-0 cursor-pointer"
-                  />
-                </td>
-                <td className="py-3.5 px-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-cyan-600/30 text-cyan-400 border border-cyan-500/30 flex items-center justify-center font-bold text-xs">
-                      SK
-                    </div>
-                    <div>
-                      <p className="font-bold text-white">Suman Krishna</p>
-                      <p className="text-[11px] text-slate-400">candidate@aihire.com</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-3.5 px-4 max-w-xs">
-                  <div className="flex flex-wrap gap-1">
-                    {["Python", "FastAPI", "React", "PostgreSQL", "RAG"].map((s, i) => (
-                      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-300">
-                        {s}
+              {candidates.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <Users className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-slate-300">No candidate accounts registered yet</p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                      Candidates can register freely, upload their resumes, and take autonomous AI interviews for any of the 20 engineering requisitions.
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                candidates.map((cand) => (
+                  <tr key={cand.id} className="hover:bg-slate-700/20 transition-colors">
+                    <td className="py-3.5 px-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedCandidateIds.includes(cand.id)}
+                        onChange={() => toggleCandidateSelect(cand.id)}
+                        className="w-4 h-4 rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-0 cursor-pointer"
+                      />
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-cyan-600/30 text-cyan-400 border border-cyan-500/30 flex items-center justify-center font-bold text-xs uppercase">
+                          {cand.candidate_name ? cand.candidate_name.slice(0, 2) : 'C'}
+                        </div>
+                        <div>
+                          <p className="font-bold text-white">{cand.candidate_name || `Candidate #${cand.id}`}</p>
+                          <p className="text-[11px] text-slate-400">{cand.candidate_email || 'No email'}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 max-w-xs">
+                      <div className="flex flex-wrap gap-1">
+                        {(cand.extracted_skills || []).slice(0, 5).map((s, i) => (
+                          <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-300">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span className="font-extrabold text-sm text-cyan-400">Active</span>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-800/80">
+                        In Pipeline
                       </span>
-                    ))}
-                  </div>
-                </td>
-                <td className="py-3.5 px-4">
-                  <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-sm text-emerald-400">88.5</span>
-                    <span className="text-[10px] text-slate-500">/ 100</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400">Skill Match: 92%</span>
-                </td>
-                <td className="py-3.5 px-4">
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
-                    Strong Hire
-                  </span>
-                </td>
-                <td className="py-3.5 px-4">
-                  <select
-                    defaultValue="Shortlisted"
-                    onChange={(e) => handleDecisionChange(1, e.target.value)}
-                    className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-cyan-500 cursor-pointer"
-                  >
-                    <option value="Pending">Pending</option>
-                    <option value="Shortlisted">Shortlisted</option>
-                    <option value="Offered">Offered</option>
-                    <option value="Rejected">Rejected</option>
-                  </select>
-                </td>
-                <td className="py-3.5 px-4 text-right">
-                  <Link
-                    to="/report/1"
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-cyan-950 text-cyan-300 border border-cyan-800/80 hover:bg-cyan-900/60 transition-colors"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    View Report
-                  </Link>
-                </td>
-              </tr>
-
-              {/* Candidate 2 */}
-              <tr className="hover:bg-slate-700/20 transition-colors">
-                <td className="py-3.5 px-4">
-                  <input
-                    type="checkbox"
-                    checked={selectedCandidateIds.includes(2)}
-                    onChange={() => toggleCandidateSelect(2)}
-                    className="w-4 h-4 rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-0 cursor-pointer"
-                  />
-                </td>
-                <td className="py-3.5 px-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-purple-600/30 text-purple-400 border border-purple-500/30 flex items-center justify-center font-bold text-xs">
-                      SC
-                    </div>
-                    <div>
-                      <p className="font-bold text-white">Shivam Kumar Chaubey</p>
-                      <p className="text-[11px] text-slate-400">shivam@aihire.com</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-3.5 px-4 max-w-xs">
-                  <div className="flex flex-wrap gap-1">
-                    {["Python", "PyTorch", "NLP", "Transformers", "Whisper"].map((s, i) => (
-                      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-300">
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                </td>
-                <td className="py-3.5 px-4">
-                  <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-sm text-cyan-400">84.0</span>
-                    <span className="text-[10px] text-slate-500">/ 100</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400">Skill Match: 88%</span>
-                </td>
-                <td className="py-3.5 px-4">
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-800/80">
-                    Hire
-                  </span>
-                </td>
-                <td className="py-3.5 px-4">
-                  <select
-                    defaultValue="Pending"
-                    onChange={(e) => handleDecisionChange(1, e.target.value)}
-                    className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-cyan-500 cursor-pointer"
-                  >
-                    <option value="Pending">Pending</option>
-                    <option value="Shortlisted">Shortlisted</option>
-                    <option value="Offered">Offered</option>
-                    <option value="Rejected">Rejected</option>
-                  </select>
-                </td>
-                <td className="py-3.5 px-4 text-right">
-                  <Link
-                    to="/jobs/2"
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 hover:text-white transition-colors"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Candidate Profile
-                  </Link>
-                </td>
-              </tr>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span className="text-xs text-slate-300">Under Review</span>
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <span className="text-xs text-cyan-400">Profile Active</span>
+                    </td>
+                  </tr>
+                ))
+              )}
 
             </tbody>
           </table>

@@ -2,8 +2,8 @@
 
 > **B.Tech Capstone Project — Academic Session 2026**  
 > **Submitted By:** Suman Krishna (Roll: 2301275) & Shivam Kumar Chaubey (Roll: 2301267)  
-> **Under Guidance of:** Mr. Vikram Singh (Research Assistant)  
-> **Department:** Computer Science and Engineering, CT Institute of Engineering, Management and Technology (I.K.G. Punjab Technical University)
+> **Under the Guidance of:** Er. Sukhdayal (Assistant Professor)  
+> **Institution:** CT Institute of Engineering, Management and Technology (I.K.G. Punjab Technical University)
 
 ---
 
@@ -50,17 +50,36 @@ Run the automated runner script to launch both backend and frontend:
 
 ---
 
-## 🔑 Pre-Configured Demo Credentials
+## 🔑 Recruiter Accounts Across 20 Engineering Branches
 
-The database automatically seeds realistic demo data on initial launch:
+The database is seeded with **20 specialized recruiters** spanning 20 distinct technical branches and fields, each managing dedicated job requisitions. **Zero pre-seeded candidates** exist to provide a clean testing environment for new evaluations.
 
-| Role | Email | Password | Pre-seeded Content |
-|---|---|---|---|
-| **Recruiter** | `recruiter@aihire.com` | `password123` | 3 active engineering jobs, candidate applicants, evaluation reports |
-| **Candidate** | `candidate@aihire.com` | `password123` | Profile for **Suman Krishna**, parsed resume, completed interview & report |
-| **Candidate** | `shivam@aihire.com` | `password123` | Profile for **Shivam Kumar Chaubey** (AI/ML Engineer) |
+**Default Password for all recruiters:** `password123`
 
-*(Quick 1-click login buttons for both accounts are available directly on the login and landing pages!)*
+| # | Recruiter Name | Branch / Discipline | Specialized Field | Login Email |
+|---|---|---|---|---|
+| 1 | **Dr. Rajesh Sharma** | Computer Science & Engineering | Artificial Intelligence & Machine Learning | `rajesh.ai@aihire.com` |
+| 2 | **Priya Patel** | Information Technology | Cloud Architecture & DevOps | `priya.cloud@aihire.com` |
+| 3 | **Amit Verma** | Information Security & Cyber Defense | Cybersecurity & Ethical Hacking | `amit.cyber@aihire.com` |
+| 4 | **Sneha Reddy** | Software Engineering | Full Stack Web Systems | `sneha.fullstack@aihire.com` |
+| 5 | **Vikram Malhotra** | Data Science & Engineering | Data Engineering & Big Data Analytics | `vikram.data@aihire.com` |
+| 6 | **Ananya Sen** | Mobile Computing | Mobile App Development | `ananya.mobile@aihire.com` |
+| 7 | **Rohit Kapoor** | Electronics & Communication | Embedded Systems & IoT | `rohit.iot@aihire.com` |
+| 8 | **Meera Nair** | Distributed Systems | Blockchain & Decentralized Protocols | `meera.web3@aihire.com` |
+| 9 | **Arjun Singhania** | Mechatronics & Robotics | Autonomous Navigation & Robotics | `arjun.robotics@aihire.com` |
+| 10 | **Pooja Joshi** | Human-Computer Interaction | UI/UX & Frontend Architecture | `pooja.frontend@aihire.com` |
+| 11 | **Karan Bhatia** | Systems Engineering | Site Reliability & Automation QA | `karan.sre@aihire.com` |
+| 12 | **Dr. Sunita Rao** | Biotechnology Engineering | Bioinformatics & HealthTech Software | `sunita.healthtech@aihire.com` |
+| 13 | **Devendra Mehta** | Financial Engineering | FinTech & Quantitative Trading | `devendra.fintech@aihire.com` |
+| 14 | **Ritu Aggarwal** | Applied Computing | Computer Vision & Visual AI | `ritu.computervision@aihire.com` |
+| 15 | **Gaurav Nanda** | Network & Communications | Telecommunications & 5G Systems | `gaurav.networks@aihire.com` |
+| 16 | **Neha Kulkarni** | Interactive Media & Graphics | Game Engine & Spatial Computing | `neha.gamedev@aihire.com` |
+| 17 | **Sandeep Yadav** | Enterprise Information Systems | Enterprise Systems & Microservices | `sandeep.erp@aihire.com` |
+| 18 | **Shalini Menon** | Cognitive Science & Computing | NLP & Generative AI | `shalini.nlp@aihire.com` |
+| 19 | **Tarun Chawla** | Aerospace Engineering | Aerospace Flight Software & Avionics | `tarun.avionics@aihire.com` |
+| 20 | **Alok Deshmukh** | VLSI & Microelectronics | Semiconductor & Chip Verification | `alok.vlsi@aihire.com` |
+
+*(Recruiter quick selection dropdown is available on the Login page for convenient testing)*
 
 ---
 
@@ -109,7 +128,7 @@ AIHire2/
 ├── frontend/
 │   ├── src/
 │   │   ├── components/                # Navbar, Footer, ProtectedRoute
-│   │   ├── context/                   # AuthContext with quick demo login
+│   │   ├── context/                   # AuthContext with JWT session management
 │   │   ├── pages/                     # Landing, Dashboard, Candidate Portal, Interview Room...
 │   │   ├── services/api.js            # REST API client
 │   │   ├── App.jsx                    # Client-side router

@@ -58,16 +58,8 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  const quickDemoLogin = async (role) => {
-    if (role === 'recruiter') {
-      return login('recruiter@aihire.com', 'password123');
-    } else {
-      return login('candidate@aihire.com', 'password123');
-    }
-  };
-
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, quickDemoLogin }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

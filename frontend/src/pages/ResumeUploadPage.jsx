@@ -149,7 +149,7 @@ AIHire: Autonomous AI Interview & Intelligent Evaluation Platform
               className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1.5"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              Fill with Demo Candidate Resume (Suman Krishna)
+              Fill with Sample Resume (Suman Krishna)
             </button>
 
             <button

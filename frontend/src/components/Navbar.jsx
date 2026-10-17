@@ -133,20 +133,6 @@ export default function Navbar() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => quickDemoLogin('recruiter')}
-                  className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-950/60 text-purple-300 border border-purple-800/70 hover:bg-purple-900/60 transition-colors"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Demo Recruiter
-                </button>
-                <button
-                  onClick={() => quickDemoLogin('candidate')}
-                  className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-950/60 text-cyan-300 border border-cyan-800/70 hover:bg-cyan-900/60 transition-colors"
-                >
-                  <UserCheck className="w-3.5 h-3.5" />
-                  Demo Candidate
-                </button>
                 <Link
                   to="/login"
                   className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-colors"

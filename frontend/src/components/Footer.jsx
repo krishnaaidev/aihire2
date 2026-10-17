@@ -44,7 +44,7 @@ export default function Footer() {
               <li className="text-slate-300 font-medium">Suman Krishna (Roll: 2301275)</li>
               <li className="text-slate-300 font-medium">Shivam Kumar Chaubey (Roll: 2301267)</li>
               <li className="text-slate-400 pt-1">Under Guidance of:</li>
-              <li className="text-cyan-400 font-medium">Mr. Vikram Singh (Research Assistant)</li>
+              <li className="text-cyan-400 font-medium">Er. Sukhdayal (Assistant Professor)</li>
             </ul>
           </div>
         </div>
