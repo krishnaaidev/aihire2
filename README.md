@@ -79,8 +79,6 @@ The database is seeded with **20 specialized recruiters** spanning 20 distinct t
 | 19 | **Tarun Chawla** | Aerospace Engineering | Aerospace Flight Software & Avionics | `tarun.avionics@aihire.com` |
 | 20 | **Alok Deshmukh** | VLSI & Microelectronics | Semiconductor & Chip Verification | `alok.vlsi@aihire.com` |
 
-*(Recruiter quick selection dropdown is available on the Login page for convenient testing)*
-
 ---
 
 ## 🧪 Testing Strategy (Synopsis Section 21)

@@ -1,30 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Bot, Mail, Lock, AlertCircle, Briefcase, ChevronDown } from 'lucide-react';
-
-const RECRUITERS = [
-  { name: "Dr. Rajesh Sharma", email: "rajesh.ai@aihire.com", field: "AI & Machine Learning" },
-  { name: "Priya Patel", email: "priya.cloud@aihire.com", field: "Cloud Architecture & DevOps" },
-  { name: "Amit Verma", email: "amit.cyber@aihire.com", field: "Cybersecurity & InfoSec" },
-  { name: "Sneha Reddy", email: "sneha.fullstack@aihire.com", field: "Full Stack Web Systems" },
-  { name: "Vikram Malhotra", email: "vikram.data@aihire.com", field: "Data Engineering & Big Data" },
-  { name: "Ananya Sen", email: "ananya.mobile@aihire.com", field: "Mobile App Development" },
-  { name: "Rohit Kapoor", email: "rohit.iot@aihire.com", field: "Embedded Systems & IoT" },
-  { name: "Meera Nair", email: "meera.web3@aihire.com", field: "Blockchain & Web3" },
-  { name: "Arjun Singhania", email: "arjun.robotics@aihire.com", field: "Robotics & Autonomous Systems" },
-  { name: "Pooja Joshi", email: "pooja.frontend@aihire.com", field: "UI/UX & Frontend Design" },
-  { name: "Karan Bhatia", email: "karan.sre@aihire.com", field: "Site Reliability & QA" },
-  { name: "Dr. Sunita Rao", email: "sunita.healthtech@aihire.com", field: "Bioinformatics & HealthTech" },
-  { name: "Devendra Mehta", email: "devendra.fintech@aihire.com", field: "FinTech & Quantitative Trading" },
-  { name: "Ritu Aggarwal", email: "ritu.computervision@aihire.com", field: "Computer Vision & Visual AI" },
-  { name: "Gaurav Nanda", email: "gaurav.networks@aihire.com", field: "5G & Telecom Networks" },
-  { name: "Neha Kulkarni", email: "neha.gamedev@aihire.com", field: "Game Engine & 3D Graphics" },
-  { name: "Sandeep Yadav", email: "sandeep.erp@aihire.com", field: "Enterprise ERP Systems" },
-  { name: "Shalini Menon", email: "shalini.nlp@aihire.com", field: "NLP & Generative AI" },
-  { name: "Tarun Chawla", email: "tarun.avionics@aihire.com", field: "Avionics & Flight Software" },
-  { name: "Alok Deshmukh", email: "alok.vlsi@aihire.com", field: "VLSI & Chip Design Verification" }
-];
+import { Bot, Mail, Lock, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -58,14 +35,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleSelectRecruiter = (e) => {
-    const selectedEmail = e.target.value;
-    if (selectedEmail) {
-      setEmail(selectedEmail);
-      setPassword('password123');
-    }
-  };
-
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md bg-slate-800/60 border border-slate-700/80 rounded-2xl p-8 backdrop-blur-md shadow-2xl">
@@ -84,26 +53,6 @@ export default function LoginPage() {
             <span>{error}</span>
           </div>
         )}
-
-        {/* Quick Recruiter Selector (20 Fields & Branches) */}
-        <div className="mb-5 p-3 rounded-xl bg-slate-900/90 border border-slate-700/70">
-          <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-            <Briefcase className="w-3.5 h-3.5 text-cyan-400" />
-            Select Recruiter Profile (20 Domains)
-          </label>
-          <select
-            onChange={handleSelectRecruiter}
-            className="w-full bg-slate-800 border border-slate-600 text-xs text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 cursor-pointer"
-            defaultValue=""
-          >
-            <option value="" disabled>-- Choose Recruiter by Branch & Field --</option>
-            {RECRUITERS.map((r, i) => (
-              <option key={i} value={r.email}>
-                {r.name} — {r.field}
-              </option>
-            ))}
-          </select>
-        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
