@@ -20,21 +20,22 @@ from app.utils.seed_data import seed_database
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("AIHire")
 
-# Create tables
-Base.metadata.create_all(bind=engine)
-
-# Seed database on startup
-try:
-    with SessionLocal() as db:
-        seed_database(db)
-except Exception as e:
-    logger.error(f"Error seeding database: {e}")
-
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
     description=settings.DESCRIPTION
 )
+
+@app.on_event("startup")
+def on_startup():
+    logger.info("Initializing database schema...")
+    Base.metadata.create_all(bind=engine)
+    try:
+        with SessionLocal() as db:
+            seed_database(db)
+        logger.info("Database schema and seed verified.")
+    except Exception as e:
+        logger.error(f"Error seeding database: {e}")
 
 # CORS setup
 app.add_middleware(
@@ -81,3 +82,10 @@ def serve_spa(full_path: str):
         "status": "online",
         "docs_url": "/docs"
     }
+
+if __name__ == "__main__":
+    import os
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    logger.info(f"Starting uvicorn server on port {port}...")
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)

@@ -509,12 +509,15 @@ def seed_database(db: Session, force: bool = False):
     db.query(User).delete()
     db.commit()
 
+    # Compute bcrypt hash once to avoid blocking CPU / timing out on startup
+    default_pwd_hash = hash_password("password123")
+
     # Seed 20 Recruiters and their respective Open Positions
     for r_info in RECRUITER_DATA:
         recruiter = User(
             name=r_info["name"],
             email=r_info["email"],
-            password_hash=hash_password("password123"),
+            password_hash=default_pwd_hash,
             role="recruiter"
         )
         db.add(recruiter)
