@@ -13,10 +13,21 @@ class Job(Base):
     description = Column(Text, nullable=False)
     required_skills = Column(Text, nullable=False)  # JSON-string array: ["Python", "FastAPI", "React"]
     preferred_skills = Column(Text, default="[]")   # JSON-string array
-    experience = Column(String(100), nullable=False) # e.g. "2-5 years"
-    education = Column(String(150), default="Bachelor's in Computer Science or related field")
+    experience = Column(String(100), nullable=False) # e.g. "Fresher (0-1 years)" or "2-5 years"
+    education = Column(String(200), default="B.Tech / B.E. in relevant engineering discipline")
     responsibilities = Column(Text, default="")
     scoring_weights = Column(Text, default="") # JSON custom weights if overridden
+    
+    # Extended Job Details
+    location = Column(String(100), default="Bengaluru / Hybrid")
+    work_mode = Column(String(50), default="Hybrid") # On-site, Hybrid, Remote
+    salary_range = Column(String(100), default="Competitive CTC")
+    openings = Column(Integer, default=3)
+    employment_type = Column(String(100), default="Full-Time")
+    experience_level = Column(String(50), default="Fresher") # Fresher, Mid-Level, Senior Lead
+    eligibility = Column(Text, default="")
+    selection_process = Column(Text, default="")
+    
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 

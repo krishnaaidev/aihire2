@@ -15,7 +15,8 @@ import {
   Clock, 
   Award,
   Play,
-  Check
+  Check,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function CandidatePortal() {
@@ -31,6 +32,7 @@ export default function CandidatePortal() {
   const [matchingJob, setMatchingJob] = useState(null);
   const [matchResult, setMatchResult] = useState(null);
   const [matchingLoading, setMatchingLoading] = useState(false);
+  const [showResumeRequiredModal, setShowResumeRequiredModal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -69,11 +71,24 @@ export default function CandidatePortal() {
   };
 
   const handleStartInterview = async (jobId, mode = 'text') => {
+    // Check if resume is uploaded
+    if (!profile?.resume_filename) {
+      setMatchingJob(null);
+      setShowResumeRequiredModal(true);
+      return;
+    }
+
     try {
       const interview = await interviewsApi.createInterview(jobId, mode);
       navigate(`/interview/${interview.id}`);
     } catch (err) {
-      alert('Failed to launch interview session: ' + err.message);
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('resume')) {
+        setMatchingJob(null);
+        setShowResumeRequiredModal(true);
+      } else {
+        alert('Failed to launch interview session: ' + msg);
+      }
     }
   };
 
@@ -334,6 +349,44 @@ export default function CandidatePortal() {
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Resume Required Modal */}
+      {showResumeRequiredModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 text-center space-y-5 shadow-2xl animate-fadeIn">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/20">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-white">Resume Required to Start Interview</h3>
+              <p className="text-xs font-semibold text-amber-400">
+                Jab tak resume upload na ho tab tak interview start nahi hoga.
+              </p>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Please upload your resume in PDF format. AIHire requires your resume to generate relevant domain questions and benchmark your evaluation score.
+              </p>
+            </div>
+
+            <div className="pt-2 flex flex-col gap-2.5">
+              <button
+                onClick={() => navigate('/upload-resume')}
+                className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-cyan-500/20"
+              >
+                <Upload className="w-4 h-4" />
+                Upload Resume (PDF) Now
+              </button>
+              
+              <button
+                onClick={() => setShowResumeRequiredModal(false)}
+                className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

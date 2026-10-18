@@ -33,6 +33,13 @@ async def create_interview(
         db.commit()
         db.refresh(candidate)
 
+    # Mandatory Resume Check: Interview cannot start without resume
+    if not candidate.resume_filename or not candidate.resume_text or not candidate.resume_text.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Resume required: Jab tak resume upload na ho tab tak interview start nahi hoga. Please upload your resume first."
+        )
+
     job = db.query(Job).filter(Job.id == interview_in.job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -93,10 +100,18 @@ async def create_interview(
     return _format_interview_out(interview, db)
 
 @router.get("/{interview_id}", response_model=InterviewOut)
-def get_interview(interview_id: int, db: Session = Depends(get_db)):
+def get_interview(interview_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     interview = db.query(Interview).filter(Interview.id == interview_id).first()
     if not interview:
         raise HTTPException(status_code=404, detail="Interview not found")
+
+    candidate = db.query(Candidate).filter(Candidate.id == interview.candidate_id).first()
+    if not candidate or not candidate.resume_filename or not candidate.resume_text or not candidate.resume_text.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Resume required: Jab tak resume upload na ho tab tak interview start nahi hoga. Please upload your resume first."
+        )
+
     return _format_interview_out(interview, db)
 
 @router.post("/{interview_id}/answer", response_model=DynamicQuestionResponse)

@@ -17,7 +17,8 @@ import {
   HelpCircle,
   Award,
   ArrowRight,
-  ShieldAlert
+  ShieldAlert,
+  Upload
 } from 'lucide-react';
 
 export default function InterviewRoom() {
@@ -34,6 +35,7 @@ export default function InterviewRoom() {
   const [submitting, setSubmitting] = useState(false);
   const [evaluationFeedback, setEvaluationFeedback] = useState(null);
   const [completed, setCompleted] = useState(false);
+  const [resumeMissingError, setResumeMissingError] = useState(false);
 
   // Voice & Video Controls
   const [isVoiceActive, setIsVoiceActive] = useState(false);
@@ -44,6 +46,7 @@ export default function InterviewRoom() {
   // References
   const videoRef = useRef(null);
   const recognitionRef = useRef(null);
+  const preSpeechTextRef = useRef('');
 
   useEffect(() => {
     fetchInterviewSession();
@@ -75,7 +78,12 @@ export default function InterviewRoom() {
         }
       }
     } catch (err) {
-      alert('Error loading interview session: ' + err.message);
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('resume')) {
+        setResumeMissingError(true);
+      } else {
+        alert('Error loading interview session: ' + msg);
+      }
     }
   };
 
@@ -111,6 +119,11 @@ export default function InterviewRoom() {
   // Text-To-Speech for AI Interviewer Voice
   const speakQuestion = (text) => {
     if (!isAiVoiceEnabled || !('speechSynthesis' in window)) return;
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      setIsVoiceActive(false);
+    }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 1.0;
@@ -118,7 +131,7 @@ export default function InterviewRoom() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Speech Recognition (Web Speech API)
+  // Speech Recognition (Web Speech API) - Fixed repetition bug
   const toggleSpeechRecognition = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -129,7 +142,13 @@ export default function InterviewRoom() {
     if (isListening) {
       recognitionRef.current?.stop();
       setIsListening(false);
+      setIsVoiceActive(false);
+      preSpeechTextRef.current = answerText;
     } else {
+      // Immediately cancel any playing AI voice to prevent mic feedback
+      window.speechSynthesis?.cancel();
+
+      preSpeechTextRef.current = answerText;
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -141,20 +160,24 @@ export default function InterviewRoom() {
       };
 
       recognition.onresult = (event) => {
-        let currentTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          currentTranscript += event.results[i][0].transcript;
+        // Collect full transcript from all results in this recognition session
+        let sessionTranscript = '';
+        for (let i = 0; i < event.results.length; ++i) {
+          sessionTranscript += event.results[i][0].transcript;
         }
-        setAnswerText(prev => prev ? `${prev} ${currentTranscript}` : currentTranscript);
+        const prefix = preSpeechTextRef.current ? preSpeechTextRef.current.trim() + ' ' : '';
+        setAnswerText(prefix + sessionTranscript.trimStart());
       };
 
       recognition.onerror = (e) => {
         console.error('Speech recognition error:', e);
         setIsListening(false);
+        setIsVoiceActive(false);
       };
 
       recognition.onend = () => {
         setIsListening(false);
+        setIsVoiceActive(false);
       };
 
       recognitionRef.current = recognition;
@@ -203,6 +226,40 @@ export default function InterviewRoom() {
       setSubmitting(false);
     }
   };
+
+  if (resumeMissingError) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-6">
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/20">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl sm:text-2xl font-black text-white">Resume Upload Required</h2>
+          <p className="text-sm font-semibold text-amber-400">
+            Jab tak resume upload na ho tab tak interview start nahi hoga.
+          </p>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            AIHire requires your resume to extract competencies, generate personalized domain questions, and benchmark evaluation scores. Please upload your resume first to unlock the interview.
+          </p>
+        </div>
+        <div className="pt-4 flex flex-wrap justify-center gap-3">
+          <button
+            onClick={() => navigate('/upload-resume')}
+            className="px-6 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition-all"
+          >
+            <Upload className="w-4 h-4" />
+            Upload Resume (PDF) Now
+          </button>
+          <button
+            onClick={() => navigate('/jobs')}
+            className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+          >
+            Browse All Jobs
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -420,7 +477,10 @@ export default function InterviewRoom() {
                   rows={8}
                   required
                   value={answerText}
-                  onChange={(e) => setAnswerText(e.target.value)}
+                  onChange={(e) => {
+                    setAnswerText(e.target.value);
+                    preSpeechTextRef.current = e.target.value;
+                  }}
                   placeholder="Provide your technical answer here. Explain architectural trade-offs, algorithms, or practical implementation steps. You can also use Voice Mode to speak naturally..."
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 leading-relaxed font-mono"
                 />
