@@ -52,6 +52,11 @@ export default function LoginPage() {
         // User closed the popup, do not show error
         return;
       }
+      if (err.code === 'auth/unauthorized-domain' || err.message?.includes('unauthorized-domain')) {
+        const domain = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+        setError(`Domain "${domain}" is not authorized in Firebase yet. To fix this: Go to Firebase Console -> Authentication -> Settings tab -> Authorized Domains -> Add "${domain}".`);
+        return;
+      }
       setError(err.message || 'Google sign-in failed');
     } finally {
       setSubmitting(false);

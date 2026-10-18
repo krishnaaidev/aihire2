@@ -44,19 +44,37 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (email, password) => {
+    let firebaseUser = null;
     if (isFirebaseConfigured) {
       try {
-        await firebaseSignIn(email, password);
+        const fbResult = await firebaseSignIn(email, password);
+        firebaseUser = fbResult?.user || null;
       } catch (fbErr) {
-        console.warn('Firebase auth attempt:', fbErr.message);
+        console.warn('Firebase auth notice:', fbErr.code || fbErr.message);
       }
     }
 
-    const res = await authApi.login(email, password);
-    localStorage.setItem('aihire_token', res.access_token);
-    localStorage.setItem('aihire_user', JSON.stringify(res.user));
-    setUser(res.user);
-    return res.user;
+    try {
+      const res = await authApi.login(email, password);
+      localStorage.setItem('aihire_token', res.access_token);
+      localStorage.setItem('aihire_user', JSON.stringify(res.user));
+      setUser(res.user);
+      return res.user;
+    } catch (apiErr) {
+      if (firebaseUser) {
+        const name = firebaseUser.displayName || email.split('@')[0];
+        try {
+          const res = await authApi.register(name, email, password, 'candidate');
+          localStorage.setItem('aihire_token', res.access_token);
+          localStorage.setItem('aihire_user', JSON.stringify(res.user));
+          setUser(res.user);
+          return res.user;
+        } catch {
+          throw apiErr;
+        }
+      }
+      throw apiErr;
+    }
   };
 
   const register = async (name, email, password, role = 'candidate') => {

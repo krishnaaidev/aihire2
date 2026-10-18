@@ -1,7 +1,12 @@
-const API_BASE = import.meta.env.VITE_API_URL || 
-  (typeof window !== 'undefined' && window.location.origin.includes('5173') 
-    ? 'http://localhost:8000/api' 
-    : '/api');
+const isLocal = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' || 
+  window.location.hostname === '127.0.0.1' ||
+  window.location.port === '5173'
+);
+
+const API_BASE = isLocal 
+  ? (import.meta.env.VITE_API_URL || 'http://localhost:8000/api')
+  : '/api';
 
 export async function apiRequest(endpoint, options = {}) {
   const token = localStorage.getItem('aihire_token');
