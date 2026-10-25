@@ -19,7 +19,8 @@ import {
   ArrowRight,
   ArrowLeft,
   ShieldAlert,
-  Upload
+  Upload,
+  RotateCcw
 } from 'lucide-react';
 
 export default function InterviewRoom() {
@@ -37,6 +38,7 @@ export default function InterviewRoom() {
   const [evaluationFeedback, setEvaluationFeedback] = useState(null);
   const [completed, setCompleted] = useState(false);
   const [resumeMissingError, setResumeMissingError] = useState(false);
+  const [submissionError, setSubmissionError] = useState(null);
 
   // Voice & Video Controls
   const [isVoiceActive, setIsVoiceActive] = useState(false);
@@ -379,6 +381,7 @@ export default function InterviewRoom() {
       setIsListening(false);
     }
     window.speechSynthesis?.cancel();
+    setSubmissionError(null);
 
     setSubmitting(true);
     try {
@@ -404,10 +407,11 @@ export default function InterviewRoom() {
           speakQuestion(res.next_question.question_text);
         }
         setSubmitting(false);
-      }, 2500);
+      }, 2000);
 
     } catch (err) {
-      alert('Failed to submit answer: ' + err.message);
+      console.error('Submit answer error:', err);
+      setSubmissionError(err.message || 'Error communicating with AI evaluation server. Please retry.');
       setSubmitting(false);
     }
   };
@@ -754,22 +758,64 @@ export default function InterviewRoom() {
             <form onSubmit={handleSubmitAnswer} className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-6 backdrop-blur-sm space-y-4">
               
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-300">Your Response</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-300">Your Response</span>
+                  {isListening && (
+                    <span className="text-[10px] text-rose-400 font-mono animate-pulse flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                      Recording voice...
+                    </span>
+                  )}
+                </div>
                 
-                {/* Voice Input Toggle Button */}
-                <button
-                  type="button"
-                  onClick={toggleSpeechRecognition}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all ${
-                    isListening
-                      ? 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-600/30 animate-pulse'
-                      : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-cyan-500'
-                  }`}
-                >
-                  {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-cyan-400" />}
-                  <span>{isListening ? 'Stop Speaking' : 'Voice Mode (Speech-to-Text)'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {answerText && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAnswerText('');
+                        preSpeechTextRef.current = '';
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-rose-400 hover:bg-slate-700/60 border border-slate-700 flex items-center gap-1 transition-colors"
+                      title="Clear transcript to re-record"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Clear / Re-record
+                    </button>
+                  )}
+
+                  {/* Voice Input Toggle Button */}
+                  <button
+                    type="button"
+                    onClick={toggleSpeechRecognition}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all ${
+                      isListening
+                        ? 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-600/30 animate-pulse'
+                        : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-cyan-500'
+                    }`}
+                  >
+                    {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-cyan-400" />}
+                    <span>{isListening ? 'Stop Speaking' : 'Voice Mode (Speech-to-Text)'}</span>
+                  </button>
+                </div>
               </div>
+
+              {/* Submission Error Banner */}
+              {submissionError && (
+                <div className="p-3.5 rounded-xl bg-rose-950/90 border border-rose-600 text-rose-200 text-xs font-semibold flex items-center justify-between animate-fadeIn shadow-lg shadow-rose-950/40">
+                  <div className="flex items-center gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>Failed to evaluate answer: {submissionError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSubmissionError(null)}
+                    className="text-xs text-rose-300 hover:text-white px-2 py-0.5 rounded bg-rose-900/60 ml-2 shrink-0"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
 
               <div className="relative">
                 <textarea

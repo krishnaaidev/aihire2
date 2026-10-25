@@ -51,6 +51,10 @@ class JobOut(JobBase):
     created_at: datetime
     applicant_count: Optional[int] = 0
     interview_count: Optional[int] = 0
+    match_score: Optional[float] = None
+    fit_level: Optional[str] = None
+    matched_skills: Optional[List[str]] = []
+    missing_skills: Optional[List[str]] = []
 
     class Config:
         from_attributes = True

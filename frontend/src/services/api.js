@@ -103,6 +103,7 @@ export const candidatesApi = {
       : `/candidates/match/${jobId}`;
     return apiRequest(url, { method: 'POST' });
   },
+  getMatchedJobs: () => apiRequest('/candidates/matched-jobs'),
 };
 
 // Interviews API

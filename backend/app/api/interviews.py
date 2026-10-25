@@ -192,7 +192,7 @@ async def submit_answer(
                 required_skills=job_skills,
                 candidate_skills=cand_skills,
                 previous_question=question.question_text,
-                candidate_answer=answer_in.answer,
+                candidate_answer=ans_in.answer,
                 eval_feedback=eval_result.get("feedback", ""),
                 order_index=interview.current_question_index + 1
             )

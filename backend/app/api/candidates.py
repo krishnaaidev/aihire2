@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.candidate import Candidate
 from app.models.job import Job
 from app.schemas.candidate import CandidateOut, CandidateUpdate, SkillMatchResult
+from app.schemas.job import JobOut
 from app.services.resume_parser import ResumeParser
 from app.services.candidate_matcher import CandidateMatcher
 from app.utils.security import get_current_user, require_role
@@ -232,3 +233,53 @@ def match_candidate_to_job(
         fit_level=match_res["fit_level"],
         recommendation=match_res["recommendation"]
     )
+
+@router.get("/matched-jobs", response_model=List[JobOut])
+def get_candidate_matched_jobs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Computes hybrid TF-IDF + skill overlap match scores for all active jobs
+    against the candidate's uploaded resume and extracted skills, returning
+    them ranked by compatibility score.
+    """
+    from app.api.jobs import _format_job_out
+    from app.models.interview import Interview
+
+    cand = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+    jobs = db.query(Job).filter(Job.is_active == True).all()
+
+    if not cand or not cand.extracted_skills:
+        results = []
+        for j in jobs:
+            count = db.query(Interview).filter(Interview.job_id == j.id).count()
+            results.append(_format_job_out(j, count))
+        return results
+
+    cand_skills = json.loads(cand.extracted_skills or "[]")
+    resume_text = cand.resume_text or " ".join(cand_skills)
+
+    matched_jobs = []
+    for j in jobs:
+        req_skills = json.loads(j.required_skills or "[]")
+        pref_skills = json.loads(j.preferred_skills or "[]")
+        count = db.query(Interview).filter(Interview.job_id == j.id).count()
+
+        match_res = CandidateMatcher.match_candidate_to_job(
+            candidate_skills=cand_skills,
+            candidate_resume_text=resume_text,
+            job_required_skills=req_skills,
+            job_preferred_skills=pref_skills,
+            job_description_text=f"{j.title} {j.description} {j.responsibilities or ''}"
+        )
+
+        job_out = _format_job_out(j, count)
+        job_out.match_score = match_res["match_score"]
+        job_out.fit_level = match_res["fit_level"]
+        job_out.matched_skills = match_res["matched_skills"]
+        job_out.missing_skills = match_res["missing_skills"]
+        matched_jobs.append(job_out)
+
+    matched_jobs.sort(key=lambda x: x.match_score or 0.0, reverse=True)
+    return matched_jobs
