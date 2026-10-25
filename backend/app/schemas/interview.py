@@ -52,7 +52,7 @@ class InterviewOut(BaseModel):
     paste_count: Optional[int] = 0
     integrity_score: Optional[float] = 100.0
     recruiter_status: Optional[str] = "Pending"
-    proctoring_flags: Optional[List[str]] = []
+    proctoring_flags: Optional[List[Any]] = []
 
     class Config:
         from_attributes = True

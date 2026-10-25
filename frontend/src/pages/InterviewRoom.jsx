@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { interviewsApi } from '../services/api';
 import { 
@@ -47,6 +47,9 @@ export default function InterviewRoom() {
   // Voice & Video Controls
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(true);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState(null);
   const [isAiVoiceEnabled, setIsAiVoiceEnabled] = useState(true);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -71,6 +74,9 @@ export default function InterviewRoom() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
+  const streamRef = useRef(null);
+  const cameraWarmupTicksRef = useRef(0);
+  const consecutivePhoneDetectionsRef = useRef(0);
   const faceMissingTimerRef = useRef(0);
   const faceWarningCountRef = useRef(0);
   const faceDetectorRef = useRef(null);
@@ -239,9 +245,9 @@ export default function InterviewRoom() {
     }, 4500);
   };
 
-  // AI Proctoring: Monitor Candidate Face & Camera Visibility (3 warnings then auto-cancelled)
+  // AI Proctoring: Monitor Candidate Face & Camera Visibility
   useEffect(() => {
-    if (completed || interviewCancelled || resumeMissingError) return;
+    if (completed || interviewCancelled || resumeMissingError || loading) return;
 
     if ('FaceDetector' in window && !faceDetectorRef.current) {
       try {
@@ -252,74 +258,48 @@ export default function InterviewRoom() {
     }
 
     const interval = setInterval(async () => {
-      // 1. Camera Active Check
-      if (!isCameraActive || !videoRef.current || videoRef.current.readyState < 2) {
-        faceMissingTimerRef.current += 1;
-        if (faceMissingTimerRef.current >= 3) {
-          handleMalpracticeDisqualification(
-            "🚨 Camera Stream Interrupted: Video preview must remain continuously active throughout the proctored interview. Retake is prohibited.",
-            "camera_interrupted"
-          );
-        }
+      // 1. Guard check: only perform proctoring inspection when camera is ready and streaming
+      if (!isCameraActive || !videoRef.current || !cameraReady || videoRef.current.readyState < 2) {
+        // Do not disqualify candidate while camera is initializing, mounting, or paused
+        return;
+      }
+
+      // Warmup grace period: wait 3 cycles (5.4s) after camera starts before checking
+      if (cameraWarmupTicksRef.current < 3) {
+        cameraWarmupTicksRef.current += 1;
         return;
       }
 
       const video = videoRef.current;
 
-      // 2. In-Camera Object Detection (Mobile Phone & Prohibited Items)
+      // 2. In-Camera Object Detection (Mobile Phone via COCO-SSD with high confidence)
       if (objectDetectorRef.current) {
         try {
           const predictions = await objectDetectorRef.current.detect(video);
+          let phoneDetected = false;
           for (const pred of predictions) {
             const cls = (pred.class || '').toLowerCase();
-            if (pred.score >= 0.40 && (cls === 'cell phone' || cls === 'remote' || cls === 'book' || cls === 'laptop')) {
+            if (pred.score >= 0.70 && cls === 'cell phone') {
+              phoneDetected = true;
+              break;
+            }
+          }
+
+          if (phoneDetected) {
+            consecutivePhoneDetectionsRef.current += 1;
+            if (consecutivePhoneDetectionsRef.current >= 2) {
               handleMalpracticeDisqualification(
-                `🚨 Prohibited Object Detected: ${cls === 'cell phone' ? 'Mobile Phone' : cls} was detected in camera view! Academic integrity rules strictly prohibit electronic devices during the interview. You are permanently disqualified from retaking this interview.`,
-                'mobile_phone_detected'
+                "🚨 Prohibited Object Detected: Mobile phone was detected in camera view! Academic integrity rules strictly prohibit electronic devices during the interview. You are permanently disqualified from retaking this interview.",
+                "mobile_phone_detected"
               );
               return;
             }
+          } else {
+            consecutivePhoneDetectionsRef.current = 0;
           }
         } catch (objErr) {
           console.warn('Object detector inspection warning:', objErr);
         }
-      }
-
-      // Computer Vision Canvas Heuristic for handheld mobile devices
-      try {
-        const cvCanvas = document.createElement('canvas');
-        cvCanvas.width = 64;
-        cvCanvas.height = 48;
-        const cvCtx = cvCanvas.getContext('2d');
-        cvCtx.drawImage(video, 0, 0, 64, 48);
-        const frameData = cvCtx.getImageData(0, 0, 64, 48).data;
-
-        // Inspect lower frame / hand zone for high-contrast rectangular device screen
-        let deviceHighlightCount = 0;
-        for (let y = 24; y < 46; y++) {
-          for (let x = 8; x < 56; x++) {
-            const idx = (y * 64 + x) * 4;
-            const r = frameData[idx], g = frameData[idx + 1], b = frameData[idx + 2];
-            const lum = r * 0.299 + g * 0.587 + b * 0.114;
-            if (lum < 22 || (lum > 225 && Math.abs(r - b) < 12)) {
-              deviceHighlightCount++;
-            }
-          }
-        }
-        if (deviceHighlightCount > 240) {
-          objectDetectionViolationsRef.current = (objectDetectionViolationsRef.current || 0) + 1;
-          if (objectDetectionViolationsRef.current >= 2) {
-            handleMalpracticeDisqualification(
-              "🚨 Prohibited Object Detected: Mobile phone / electronic device detected in camera frame! Interview permanently cancelled and retake is prohibited.",
-              "mobile_phone_detected"
-            );
-            return;
-          }
-        } else {
-          objectDetectionViolationsRef.current = 0;
-        }
-      } catch (cvErr) {
-        // CV fallback
       }
 
       // 3. Face Movement Tracking & Multi-Face Detection
@@ -353,12 +333,12 @@ export default function InterviewRoom() {
               const deltaY = Math.abs(cy - prev.cy);
 
               // Detect candidate looking away sideways (yaw) or dipping head down towards phone
-              const isLookingAway = cx < 0.18 || cx > 0.82 || cy > 0.82;
-              const isExcessiveMovement = deltaX > 0.28 || deltaY > 0.30;
+              const isLookingAway = cx < 0.15 || cx > 0.85 || cy > 0.88;
+              const isExcessiveMovement = deltaX > 0.35 || deltaY > 0.35;
 
               if (isLookingAway || isExcessiveMovement) {
                 faceMovementViolationsRef.current += 1;
-                if (faceMovementViolationsRef.current >= 2) {
+                if (faceMovementViolationsRef.current >= 3) {
                   handleMalpracticeDisqualification(
                     "🚨 Suspicious Face Movement Detected: Excessive movement / looking away from the interview screen was detected. Interview permanently cancelled and retake is prohibited.",
                     "face_movement_detected"
@@ -397,7 +377,7 @@ export default function InterviewRoom() {
             }
           }
 
-          if (count < 20) {
+          if (count < 15) {
             faceDetected = false;
           } else {
             faceDetected = true;
@@ -409,12 +389,12 @@ export default function InterviewRoom() {
               const prev = lastFaceBoxRef.current;
               const deltaX = Math.abs(cx - prev.cx);
               const deltaY = Math.abs(cy - prev.cy);
-              const isLookingAway = cx < 0.18 || cx > 0.82 || cy > 0.82;
-              const isExcessiveMovement = deltaX > 0.28 || deltaY > 0.30;
+              const isLookingAway = cx < 0.15 || cx > 0.85 || cy > 0.88;
+              const isExcessiveMovement = deltaX > 0.35 || deltaY > 0.35;
 
               if (isLookingAway || isExcessiveMovement) {
                 faceMovementViolationsRef.current += 1;
-                if (faceMovementViolationsRef.current >= 2) {
+                if (faceMovementViolationsRef.current >= 3) {
                   handleMalpracticeDisqualification(
                     "🚨 Suspicious Face Movement Detected: Excessive movement / looking away from the interview screen was detected. Interview permanently cancelled and retake is prohibited.",
                     "face_movement_detected"
@@ -434,7 +414,7 @@ export default function InterviewRoom() {
 
       if (!faceDetected) {
         faceMissingTimerRef.current += 1;
-        if (faceMissingTimerRef.current >= 2) {
+        if (faceMissingTimerRef.current >= 3) {
           faceMissingTimerRef.current = 0;
           faceWarningCountRef.current = (faceWarningCountRef.current || 0) + 1;
           const currentCount = faceWarningCountRef.current;
@@ -464,9 +444,10 @@ export default function InterviewRoom() {
     }, 1800);
 
     return () => clearInterval(interval);
-  }, [isCameraActive, completed, interviewCancelled, resumeMissingError]);
+  }, [cameraReady, isCameraActive, completed, interviewCancelled, resumeMissingError, loading]);
 
   const handleMalpracticeDisqualification = async (reason, violationType = 'malpractice') => {
+    const isTechnical = violationType === 'camera_interrupted' || violationType === 'technical_error';
     setInterviewCancelled(true);
     setCancelReason(reason);
     stopWebcam();
@@ -474,9 +455,24 @@ export default function InterviewRoom() {
     stopAiVoice();
 
     try {
-      await interviewsApi.cancelInterview(Number(interviewId), reason, violationType);
+      await interviewsApi.cancelInterview(Number(interviewId), reason, violationType, !isTechnical);
     } catch (e) {
       console.error('Failed to cancel interview on backend:', e);
+    }
+  };
+
+  const handleRestartFreshInterview = async () => {
+    if (!interview?.job_id) {
+      navigate('/candidate');
+      return;
+    }
+    try {
+      const newIv = await interviewsApi.createInterview(interview.job_id, interview.mode || 'text');
+      navigate(`/interview/${newIv.id}`);
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to restart clean interview:', err);
+      navigate('/candidate');
     }
   };
 
@@ -530,34 +526,95 @@ export default function InterviewRoom() {
     }
   };
 
-  const setupWebcam = async () => {
+  const setupWebcam = useCallback(async () => {
+    setCameraLoading(true);
+    setCameraError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      let stream = streamRef.current;
+      const hasActiveTracks = stream && stream.getVideoTracks().some(t => t.readyState === 'live');
+      if (!hasActiveTracks) {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: 'user'
+          },
+          audio: false
+        });
+        streamRef.current = stream;
+      }
+      setIsCameraActive(true);
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn('Video auto-play warning:', playErr);
+        }
+        setCameraReady(true);
       }
     } catch (e) {
-      console.log('Webcam not permitted or unavailable:', e);
-      setIsCameraActive(false);
+      console.warn('Webcam permission or device error:', e);
+      setCameraError(
+        e.name === 'NotAllowedError'
+          ? 'Camera permission denied. Please allow camera access in your browser settings to proceed with the interview.'
+          : 'Webcam device is currently unavailable or used by another application.'
+      );
+      setCameraReady(false);
+    } finally {
+      setCameraLoading(false);
     }
-  };
+  }, []);
 
-  const stopWebcam = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const tracks = videoRef.current.srcObject.getTracks();
-      tracks.forEach(track => track.stop());
+  const stopWebcam = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
-  };
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraReady(false);
+  }, []);
 
   const toggleCamera = () => {
     if (isCameraActive) {
-      stopWebcam();
+      if (streamRef.current) {
+        streamRef.current.getVideoTracks().forEach(t => { t.enabled = false; });
+      }
       setIsCameraActive(false);
+      setCameraReady(false);
     } else {
-      setupWebcam();
       setIsCameraActive(true);
+      if (streamRef.current && streamRef.current.getVideoTracks().some(t => t.readyState === 'live')) {
+        streamRef.current.getVideoTracks().forEach(t => { t.enabled = true; });
+        if (videoRef.current) {
+          videoRef.current.srcObject = streamRef.current;
+          videoRef.current.play().catch(() => {});
+          setCameraReady(true);
+        }
+      } else {
+        setupWebcam();
+      }
     }
   };
+
+  // Synchronize stream with videoRef when video mounts or camera state toggles
+  useEffect(() => {
+    if (!loading && isCameraActive && streamRef.current && videoRef.current) {
+      if (videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+      }
+      videoRef.current.play()
+        .then(() => {
+          setCameraReady(true);
+        })
+        .catch((err) => {
+          console.warn('Video auto-play error:', err);
+        });
+    }
+  }, [loading, isCameraActive]);
 
   // Text-To-Speech for AI Interviewer Voice (Cross-browser, anti-GC, autoplay resilient)
   const speakQuestion = (text) => {
@@ -795,6 +852,69 @@ export default function InterviewRoom() {
   }
 
   if (interviewCancelled) {
+    const isTechnical = cancelReason && (
+      cancelReason.toLowerCase().includes('camera stream interrupted') ||
+      cancelReason.toLowerCase().includes('camera device') ||
+      cancelReason.toLowerCase().includes('camera preview') ||
+      cancelReason.toLowerCase().includes('technical') ||
+      cancelReason.toLowerCase().includes('connection')
+    );
+
+    if (isTechnical) {
+      return (
+        <div className="max-w-2xl mx-auto my-12 p-6 sm:p-10 rounded-2xl bg-amber-950/40 border-2 border-amber-500 text-center space-y-6 shadow-2xl backdrop-blur-md animate-fadeIn">
+          <div className="w-20 h-20 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/20">
+            <VideoOff className="w-10 h-10 text-amber-400" />
+          </div>
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-300 px-3.5 py-1 rounded-full bg-amber-950 border border-amber-700 inline-flex items-center gap-1.5 shadow-inner">
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              Camera Feed Disconnected • Retake Permitted
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-black text-white mt-4">
+              Camera Stream Interrupted
+            </h2>
+            <p className="text-xs sm:text-sm text-amber-200/90 mt-3 max-w-lg mx-auto leading-relaxed font-medium">
+              {cancelReason || 'Video preview was interrupted or camera access was delayed during startup. No academic dishonesty was recorded.'}
+            </p>
+          </div>
+
+          <div className="bg-slate-900/90 border border-amber-900/60 rounded-xl p-4 sm:p-5 text-left text-xs space-y-3">
+            <div className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider flex items-center justify-between pb-2 border-b border-slate-800">
+              <span>Technical Stream Status:</span>
+              <span className="text-amber-400 font-bold flex items-center gap-1">
+                <RotateCcw className="w-3.5 h-3.5" /> RETAKE PERMITTED
+              </span>
+            </div>
+            <div className="text-slate-300 text-[11px] flex items-center justify-between">
+              <span>Recruiter Status:</span>
+              <span className="font-bold text-amber-400">Technical Disconnect (Pending Retake)</span>
+            </div>
+            <div className="text-slate-300 text-[11px] leading-relaxed bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+              Please ensure your webcam is connected, browser camera permissions are allowed, and you are positioned in frame before launching your session.
+            </div>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={handleRestartFreshInterview}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 transition-all flex items-center justify-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Restart Fresh Interview Session
+            </button>
+            <button
+              onClick={() => navigate('/candidate')}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Return to Candidate Portal
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="max-w-2xl mx-auto my-12 p-6 sm:p-10 rounded-2xl bg-rose-950/50 border-2 border-rose-600 text-center space-y-6 shadow-2xl backdrop-blur-md animate-fadeIn">
         <div className="w-20 h-20 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto shadow-lg shadow-rose-600/30">
@@ -1091,13 +1211,22 @@ export default function InterviewRoom() {
             {/* Candidate Webcam Preview Box */}
             <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-3.5 sm:p-4 relative overflow-hidden">
               <div className="flex items-center justify-between mb-2 sm:mb-3 text-xs">
-                <span className="font-semibold text-slate-300">Candidate Video Stream</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-300">Candidate Video Stream</span>
+                  {cameraReady && isCameraActive && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      Live Preview
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={toggleCamera}
-                    className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white"
+                    className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                    title={isCameraActive ? "Pause Camera Stream" : "Turn On Camera Stream"}
                   >
-                    {isCameraActive ? <Video className="w-3.5 h-3.5" /> : <VideoOff className="w-3.5 h-3.5" />}
+                    {isCameraActive ? <Video className="w-3.5 h-3.5 text-cyan-400" /> : <VideoOff className="w-3.5 h-3.5 text-slate-400" />}
                   </button>
                 </div>
               </div>
@@ -1108,24 +1237,60 @@ export default function InterviewRoom() {
                   autoPlay
                   playsInline
                   muted
-                  className={`w-full h-full object-cover ${!isCameraActive ? 'hidden' : ''}`}
+                  className={`w-full h-full object-cover ${(!isCameraActive || !cameraReady) ? 'hidden' : ''}`}
                 />
-                {!isCameraActive && (
-                  <div className="text-center p-4">
-                    <VideoOff className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                    <span className="text-xs text-slate-500">Camera preview off</span>
+
+                {cameraLoading && (
+                  <div className="text-center p-4 space-y-2">
+                    <div className="w-7 h-7 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <span className="text-xs text-slate-400 font-medium">Initializing camera stream...</span>
+                  </div>
+                )}
+
+                {cameraError && !cameraLoading && (
+                  <div className="text-center p-4 space-y-2 max-w-xs mx-auto">
+                    <VideoOff className="w-8 h-8 text-rose-500 mx-auto" />
+                    <p className="text-[11px] text-rose-300 font-medium leading-relaxed">{cameraError}</p>
+                    <button
+                      onClick={setupWebcam}
+                      className="px-3 py-1 rounded-lg text-[11px] font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 inline-flex items-center gap-1 shadow-sm transition-all"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Retry Camera Access
+                    </button>
+                  </div>
+                )}
+
+                {!cameraLoading && !cameraError && !isCameraActive && (
+                  <div className="text-center p-4 space-y-2">
+                    <VideoOff className="w-8 h-8 text-slate-600 mx-auto" />
+                    <span className="text-xs text-slate-400 block font-medium">Camera stream is paused</span>
+                    <button
+                      onClick={setupWebcam}
+                      className="px-3 py-1 rounded-lg text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 inline-flex items-center gap-1 transition-all"
+                    >
+                      <Video className="w-3 h-3" /> Turn On Camera
+                    </button>
+                  </div>
+                )}
+
+                {!cameraLoading && !cameraError && isCameraActive && !cameraReady && (
+                  <div className="text-center p-4 space-y-2">
+                    <div className="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <span className="text-xs text-slate-400 font-medium">Connecting video preview feed...</span>
                   </div>
                 )}
 
                 {/* Face visibility status badge inside webcam */}
-                <div className={`absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border backdrop-blur-sm ${
-                  faceWarningCount === 0
-                    ? 'bg-emerald-950/70 border-emerald-700 text-emerald-300'
-                    : 'bg-rose-950/90 border-rose-600 text-rose-200 animate-pulse'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${faceWarningCount === 0 ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
-                  <span>{faceWarningCount === 0 ? 'Face Detected' : `Face Warning ${faceWarningCount}/3`}</span>
-                </div>
+                {cameraReady && isCameraActive && (
+                  <div className={`absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border backdrop-blur-sm ${
+                    faceWarningCount === 0
+                      ? 'bg-emerald-950/70 border-emerald-700 text-emerald-300'
+                      : 'bg-rose-950/90 border-rose-600 text-rose-200 animate-pulse'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${faceWarningCount === 0 ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
+                    <span>{faceWarningCount === 0 ? 'Face Detected' : `Face Warning ${faceWarningCount}/3`}</span>
+                  </div>
+                )}
                 
                 {/* Live speech indicator badge */}
                 {isListening && (

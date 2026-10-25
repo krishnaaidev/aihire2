@@ -55,17 +55,46 @@ async def create_interview(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # Check if candidate has a cancelled interview for this job (permanent block - candidate cannot retake)
-    cancelled_interview = db.query(Interview).filter(
+    # Check if candidate has a cancelled interview for this job (permanent block ONLY if actual intentional malpractice)
+    cancelled_interviews = db.query(Interview).filter(
         Interview.candidate_id == candidate.id,
         Interview.job_id == job.id,
         Interview.status == "cancelled"
-    ).first()
-    if cancelled_interview:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Interview permanently cancelled due to academic integrity violation (prohibited object or face movement detected). Candidate is not allowed to give or retake this interview."
-        )
+    ).all()
+
+    for ci in cancelled_interviews:
+        flags = json.loads(ci.proctoring_flags or "[]")
+        is_deliberate_malpractice = False
+        for f in flags:
+            if isinstance(f, dict):
+                v_type = f.get("violation_type", "")
+                perm = f.get("permanent_disqualification", False)
+                if perm and v_type in [
+                    "mobile_phone_detected",
+                    "prohibited_object",
+                    "multiple_faces_detected",
+                    "face_movement_detected",
+                    "face_absent_3_strikes",
+                    "malpractice",
+                    "proctoring_malpractice"
+                ]:
+                    is_deliberate_malpractice = True
+                    break
+            elif isinstance(f, str):
+                lower_f = f.lower()
+                if any(k in lower_f for k in ["mobile phone", "prohibited object", "multiple individuals", "3 face absence", "3 consecutive warnings", "malpractice"]):
+                    is_deliberate_malpractice = True
+                    break
+
+        if is_deliberate_malpractice:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Interview permanently cancelled due to academic integrity violation (prohibited object or face movement detected). Candidate is not allowed to give or retake this interview."
+            )
+        else:
+            # Technical camera interruption or startup delay: archive old session so a fresh interview can proceed
+            ci.status = "archived_technical_error"
+            db.commit()
 
     # Check if there is already an in-progress interview for this job
     existing = db.query(Interview).filter(
@@ -394,25 +423,28 @@ def cancel_interview(
 
     reason = payload.reason if payload and payload.reason else "Session Cancelled: Prohibited object (mobile phone) or face movement detected."
     violation_type = payload.violation_type if payload and payload.violation_type else "malpractice"
+    is_technical = violation_type in ["camera_interrupted", "technical_error", "camera_initialization_failed"]
+    is_permanent = False if is_technical else (payload.permanent_disqualification if payload and payload.permanent_disqualification is not None else True)
+
     interview.status = "cancelled"
-    interview.recruiter_status = "Rejected (Proctoring Violation)"
-    interview.integrity_score = 0.0
+    interview.recruiter_status = "Rejected (Proctoring Violation)" if is_permanent else "Technical Disconnect (Retake Permitted)"
+    interview.integrity_score = 0.0 if is_permanent else (interview.integrity_score or 100.0)
 
     flags = json.loads(interview.proctoring_flags or "[]")
     flags.append({
         "event": "interview_cancelled",
         "violation_type": violation_type,
         "reason": reason,
-        "permanent_disqualification": True,
+        "permanent_disqualification": is_permanent,
         "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     })
     interview.proctoring_flags = json.dumps(flags)
 
     if interview.report:
-        interview.report.decision_status = "Rejected"
-        interview.report.recommendation = "Disqualified (Proctoring Violation)"
-        interview.report.integrity_score = 0.0
-        interview.report.proctoring_summary = f"Session Terminated & Permanently Disqualified: {reason}"
+        interview.report.decision_status = "Rejected" if is_permanent else "Incomplete (Technical)"
+        interview.report.recommendation = "Disqualified (Proctoring Violation)" if is_permanent else "Retake Recommended (Technical Disconnect)"
+        interview.report.integrity_score = interview.integrity_score
+        interview.report.proctoring_summary = f"Session Terminated: {reason}"
 
     db.commit()
     return {
@@ -420,7 +452,7 @@ def cancel_interview(
         "message": reason,
         "recruiter_status": interview.recruiter_status,
         "integrity_score": interview.integrity_score,
-        "retake_allowed": False
+        "retake_allowed": not is_permanent
     }
 
 @router.post("/{interview_id}/shuffle-questions")

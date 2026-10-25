@@ -137,9 +137,39 @@ export default function CandidatePortal() {
     }
   };
 
+  const isMalpracticeDisqualified = (iv) => {
+    if (!iv || iv.status !== 'cancelled') return false;
+    const flags = Array.isArray(iv.proctoring_flags) ? iv.proctoring_flags : [];
+    
+    for (const f of flags) {
+      if (typeof f === 'object' && f !== null) {
+        if (f.permanent_disqualification === false || f.violation_type === 'camera_interrupted' || f.violation_type === 'technical_error') {
+          return false;
+        }
+        if (f.permanent_disqualification === true && ['mobile_phone_detected', 'multiple_faces_detected', 'face_movement_detected', 'face_absent_3_strikes', 'proctoring_malpractice'].includes(f.violation_type)) {
+          return true;
+        }
+      }
+      if (typeof f === 'string') {
+        const lf = f.toLowerCase();
+        if (lf.includes('camera stream interrupted') || lf.includes('technical disconnect')) {
+          return false;
+        }
+        if (lf.includes('mobile phone') || lf.includes('prohibited object') || lf.includes('multiple individuals') || lf.includes('3 face absence') || lf.includes('3 consecutive warnings')) {
+          return true;
+        }
+      }
+    }
+
+    if (iv.recruiter_status && (iv.recruiter_status.toLowerCase().includes('technical') || iv.recruiter_status.toLowerCase().includes('retake permitted'))) {
+      return false;
+    }
+    return Boolean(iv.recruiter_status && iv.recruiter_status.toLowerCase().includes('malpractice'));
+  };
+
   const handleStartInterview = async (jobId, mode = 'text') => {
-    // Check if candidate already has a cancelled interview for this job (permanent disqualification)
-    const cancelledIv = myInterviews.find((iv) => iv.job_id === jobId && iv.status === 'cancelled');
+    // Check if candidate already has a cancelled interview for this job (permanent disqualification only if deliberate malpractice)
+    const cancelledIv = myInterviews.find((iv) => iv.job_id === jobId && isMalpracticeDisqualified(iv));
     if (cancelledIv) {
       setMatchingJob(null);
       setSelectedCancelledIv(cancelledIv);
@@ -610,7 +640,7 @@ export default function CandidatePortal() {
                         </button>
                         {(() => {
                           const cancelledIv = myInterviews.find((iv) => iv.job_id === job.id && iv.status === 'cancelled');
-                          if (cancelledIv) {
+                          if (cancelledIv && isMalpracticeDisqualified(cancelledIv)) {
                             return (
                               <button
                                 onClick={() => setSelectedCancelledIv(cancelledIv)}
@@ -1322,7 +1352,7 @@ export default function CandidatePortal() {
                   >
                     Close
                   </button>
-                  {myInterviews.some((iv) => iv.job_id === matchingJob.id && iv.status === 'cancelled') ? (
+                  {myInterviews.some((iv) => iv.job_id === matchingJob.id && isMalpracticeDisqualified(iv)) ? (
                     <button
                       disabled
                       className="px-5 py-2 rounded-xl text-xs font-bold bg-rose-950/80 text-rose-300 border border-rose-800 cursor-not-allowed flex items-center gap-1.5"

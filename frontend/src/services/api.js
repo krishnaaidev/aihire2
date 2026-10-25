@@ -136,10 +136,14 @@ export const interviewsApi = {
       method: 'PATCH',
       body: JSON.stringify({ recruiter_status: recruiterStatus }),
     }),
-  cancelInterview: (interviewId, reason, violationType = 'malpractice') =>
+  cancelInterview: (interviewId, reason, violationType = 'malpractice', permanentDisqualification = true) =>
     apiRequest(`/interviews/${interviewId}/cancel`, {
       method: 'POST',
-      body: JSON.stringify({ reason, violation_type: violationType, permanent_disqualification: true }),
+      body: JSON.stringify({
+        reason,
+        violation_type: violationType,
+        permanent_disqualification: permanentDisqualification,
+      }),
     }),
   shuffleQuestions: (interviewId) =>
     apiRequest(`/interviews/${interviewId}/shuffle-questions`, {

@@ -70,7 +70,36 @@ export default function JobDetailsPage() {
   const cancelledInterview = myInterviews.find(
     (iv) => iv.job_id === Number(jobId) && iv.status === 'cancelled'
   );
-  const isDisqualified = Boolean(cancelledInterview);
+  
+  const isMalpracticeDisqualified = (iv) => {
+    if (!iv || iv.status !== 'cancelled') return false;
+    const flags = Array.isArray(iv.proctoring_flags) ? iv.proctoring_flags : [];
+    for (const f of flags) {
+      if (typeof f === 'object' && f !== null) {
+        if (f.permanent_disqualification === false || f.violation_type === 'camera_interrupted' || f.violation_type === 'technical_error') {
+          return false;
+        }
+        if (f.permanent_disqualification === true && ['mobile_phone_detected', 'multiple_faces_detected', 'face_movement_detected', 'face_absent_3_strikes', 'proctoring_malpractice'].includes(f.violation_type)) {
+          return true;
+        }
+      }
+      if (typeof f === 'string') {
+        const lf = f.toLowerCase();
+        if (lf.includes('camera stream interrupted') || lf.includes('technical disconnect')) {
+          return false;
+        }
+        if (lf.includes('mobile phone') || lf.includes('prohibited object') || lf.includes('multiple individuals') || lf.includes('3 face absence') || lf.includes('3 consecutive warnings')) {
+          return true;
+        }
+      }
+    }
+    if (iv.recruiter_status && (iv.recruiter_status.toLowerCase().includes('technical') || iv.recruiter_status.toLowerCase().includes('retake permitted'))) {
+      return false;
+    }
+    return Boolean(iv.recruiter_status && iv.recruiter_status.toLowerCase().includes('malpractice'));
+  };
+
+  const isDisqualified = Boolean(cancelledInterview && isMalpracticeDisqualified(cancelledInterview));
 
   const handleStartInterview = async (mode = 'text') => {
     if (isDisqualified) {
