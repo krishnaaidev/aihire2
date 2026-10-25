@@ -640,6 +640,29 @@ def seed_database(db: Session, force: bool = False):
 
     # Compute bcrypt hash once to avoid blocking CPU / timing out on startup
     default_pwd_hash = hash_password("password123")
+    admin_pwd_hash = hash_password("Admin@AIHire2026!")
+
+    # Seed Super Admin Accounts idempotently
+    admin_accounts = [
+        {"name": "Suman Krishna (Super Admin)", "email": "admin@aihire.com"},
+        {"name": "Suman Krishna (Super Admin)", "email": "suman.admin@aihire.com"}
+    ]
+    for adm in admin_accounts:
+        existing_admin = db.query(User).filter(User.email == adm["email"]).first()
+        if not existing_admin:
+            admin_user = User(
+                name=adm["name"],
+                email=adm["email"],
+                password_hash=admin_pwd_hash,
+                role="admin"
+            )
+            db.add(admin_user)
+            db.commit()
+            print(f"Super Admin created: {adm['email']}")
+        else:
+            if existing_admin.role != "admin":
+                existing_admin.role = "admin"
+                db.commit()
 
     # Seed Recruiters and their respective Open Positions idempotently without wiping candidate data
     new_jobs_added = 0

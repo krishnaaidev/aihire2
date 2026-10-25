@@ -191,3 +191,35 @@ export const reportsApi = {
 export const analyticsApi = {
   getRecruiterAnalytics: () => apiRequest('/analytics/recruiter'),
 };
+
+// Super Admin API
+export const adminApi = {
+  getMetrics: () => apiRequest('/admin/metrics'),
+  getCandidates: () => apiRequest('/admin/candidates'),
+  getRecruiters: () => apiRequest('/admin/recruiters'),
+  getInterviews: () => apiRequest('/admin/interviews'),
+  liftDisqualification: (interviewId) =>
+    apiRequest(`/admin/interviews/${interviewId}/lift-disqualification`, {
+      method: 'POST',
+    }),
+  deleteInterview: (interviewId) =>
+    apiRequest(`/admin/interviews/${interviewId}`, {
+      method: 'DELETE',
+    }),
+  downloadExportCsv: async (entity) => {
+    const token = localStorage.getItem('aihire_token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/admin/export/${entity}`, { headers });
+    if (!res.ok) throw new Error(`Failed to download ${entity} CSV`);
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AIHire_Admin_${entity}_Report.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  },
+};

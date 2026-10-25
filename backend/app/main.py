@@ -14,7 +14,8 @@ from app.api import (
     interviews_router,
     reports_router,
     analytics_router,
-    websocket_router
+    websocket_router,
+    admin_router
 )
 from app.utils.seed_data import seed_database
 
@@ -74,6 +75,7 @@ app.include_router(interviews_router)
 app.include_router(reports_router)
 app.include_router(analytics_router)
 app.include_router(websocket_router)
+app.include_router(admin_router)
 
 @app.get("/api/health")
 def health():

@@ -18,6 +18,7 @@ import ResumeUploadPage from './pages/ResumeUploadPage';
 import InterviewRoom from './pages/InterviewRoom';
 import InterviewReportPage from './pages/InterviewReportPage';
 import CandidateComparisonPage from './pages/CandidateComparisonPage';
+import AdminDashboard from './pages/AdminDashboard';
 
 export default function App() {
   return (
@@ -95,6 +96,11 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
+
+              {/* Secret Super Admin Console (Direct Link Only - Hidden from Website Navigation) */}
+              <Route path="/admin-portal" element={<AdminDashboard />} />
+              <Route path="/admin-console" element={<AdminDashboard />} />
+              <Route path="/super-admin" element={<AdminDashboard />} />
 
               {/* Catch-all fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />
