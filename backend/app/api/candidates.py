@@ -131,6 +131,8 @@ def update_my_candidate_profile(
         cand = Candidate(user_id=current_user.id)
         db.add(cand)
 
+    if cand_in.name and cand_in.name.strip():
+        current_user.name = cand_in.name.strip()
     if cand_in.extracted_skills is not None: cand.extracted_skills = json.dumps(cand_in.extracted_skills)
     if cand_in.education is not None: cand.education = json.dumps(cand_in.education)
     if cand_in.experience is not None: cand.experience = json.dumps(cand_in.experience)

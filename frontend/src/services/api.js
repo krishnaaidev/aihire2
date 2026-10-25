@@ -135,6 +135,11 @@ export const interviewsApi = {
       method: 'PATCH',
       body: JSON.stringify({ recruiter_status: recruiterStatus }),
     }),
+  cancelInterview: (interviewId, reason) =>
+    apiRequest(`/interviews/${interviewId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
   getExportCsvUrl: (jobId = 'all') => `${API_BASE}/interviews/job/${jobId}/export-csv`,
   downloadExportCsv: async (jobId = 'all') => {
     const token = localStorage.getItem('aihire_token');

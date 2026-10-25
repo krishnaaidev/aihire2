@@ -1,7 +1,7 @@
 # AIHire: Autonomous AI Interview & Intelligent Candidate Evaluation Platform
 
 > **B.Tech Capstone Project — Academic Session 2026**  
-> **Submitted By:** Suman Krishna (Roll: 2301275) & Shivam Kumar Chaubey (Roll: 2301267)  
+> **Submitted By:** Suman Krishna (Roll: 2301275)  
 > **Under the Guidance of:** Er. Sukhdayal (Assistant Professor)  
 > **Institution:** CT Institute of Engineering, Management and Technology (I.K.G. Punjab Technical University)
 

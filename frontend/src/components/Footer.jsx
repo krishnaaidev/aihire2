@@ -41,10 +41,10 @@ export default function Footer() {
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200 mb-3">Submitted By & Guided By</h4>
             <ul className="space-y-1.5 text-xs">
-              <li className="text-slate-300 font-medium">Suman Krishna (Roll: 2301275)</li>
-              <li className="text-slate-300 font-medium">Shivam Kumar Chaubey (Roll: 2301267)</li>
-              <li className="text-slate-400 pt-1">Under Guidance of:</li>
-              <li className="text-cyan-400 font-medium">Er. Sukhdayal (Assistant Professor)</li>
+              <li className="text-slate-400">Submitted by:</li>
+              <li className="text-cyan-400 font-bold">Suman Krishna (Roll: 2301275)</li>
+              <li className="text-slate-400 pt-1">Under the Guidance of:</li>
+              <li className="text-white font-medium">Er. Sukhdayal (Assistant Professor)</li>
             </ul>
           </div>
         </div>

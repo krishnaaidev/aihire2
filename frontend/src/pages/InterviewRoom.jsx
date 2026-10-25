@@ -17,6 +17,7 @@ import {
   HelpCircle,
   Award,
   ArrowRight,
+  ArrowLeft,
   ShieldAlert,
   Upload
 } from 'lucide-react';
@@ -49,6 +50,14 @@ export default function InterviewRoom() {
   const [integrityScore, setIntegrityScore] = useState(100);
   const [proctoringWarning, setProctoringWarning] = useState(null);
   const lastEventTimeRef = useRef(0);
+
+  // Face Detection & Warning States (3 warnings then auto-cancelled)
+  const [faceWarningCount, setFaceWarningCount] = useState(0);
+  const [interviewCancelled, setInterviewCancelled] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [faceWarningMessage, setFaceWarningMessage] = useState(null);
+  const faceMissingTimerRef = useRef(0);
+  const faceDetectorRef = useRef(null);
 
   // References
   const videoRef = useRef(null);
@@ -130,24 +139,128 @@ export default function InterviewRoom() {
     }, 4500);
   };
 
+  // AI Proctoring: Monitor Candidate Face & Camera Visibility (3 warnings then auto-cancelled)
+  useEffect(() => {
+    if (completed || interviewCancelled || resumeMissingError) return;
+
+    if ('FaceDetector' in window && !faceDetectorRef.current) {
+      try {
+        faceDetectorRef.current = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+      } catch (e) {
+        console.log('Native FaceDetector error:', e);
+      }
+    }
+
+    const interval = setInterval(async () => {
+      let faceDetected = true;
+
+      // Check if camera is deactivated or stream paused
+      if (!isCameraActive || !videoRef.current || videoRef.current.readyState < 2) {
+        faceDetected = false;
+      } else {
+        const video = videoRef.current;
+        if (faceDetectorRef.current) {
+          try {
+            const faces = await faceDetectorRef.current.detect(video);
+            faceDetected = faces && faces.length > 0;
+          } catch {
+            faceDetected = true;
+          }
+        } else {
+          // Offscreen canvas frame analysis: check for camera obstruction or dark frame
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 40;
+            canvas.height = 30;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, 40, 30);
+            const imgData = ctx.getImageData(0, 0, 40, 30);
+            const data = imgData.data;
+            let totalLum = 0;
+            for (let i = 0; i < data.length; i += 4) {
+              totalLum += (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+            }
+            const avgLum = totalLum / (data.length / 4);
+            faceDetected = avgLum >= 10;
+          } catch {
+            faceDetected = true;
+          }
+        }
+      }
+
+      if (!faceDetected) {
+        faceMissingTimerRef.current += 1;
+        // Trigger violation warning if face is absent for ~4-5 seconds (2 checks)
+        if (faceMissingTimerRef.current >= 2) {
+          faceMissingTimerRef.current = 0;
+          handleFaceMissingViolation();
+        }
+      } else {
+        faceMissingTimerRef.current = 0;
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [isCameraActive, completed, interviewCancelled, resumeMissingError, faceWarningCount]);
+
+  const handleFaceMissingViolation = async () => {
+    const nextCount = faceWarningCount + 1;
+    setFaceWarningCount(nextCount);
+
+    if (nextCount < 3) {
+      setFaceWarningMessage(
+        `🚨 Face Not Visible (Warning ${nextCount} of 3): Candidate face is not detected in camera frame! Please face the camera directly. 3 warnings will permanently auto-cancel this interview.`
+      );
+      try {
+        await interviewsApi.logProctoringEvent(
+          Number(interviewId),
+          'face_not_visible',
+          `Candidate face not visible in camera preview (Warning ${nextCount}/3)`
+        );
+      } catch (e) {
+        console.warn('Proctoring log error:', e);
+      }
+
+      setTimeout(() => {
+        setFaceWarningMessage((cur) => (cur ? null : cur));
+      }, 5500);
+    } else {
+      // 3 Warnings Reached -> Auto-cancel interview!
+      setInterviewCancelled(true);
+      const reason = 'Interview Auto-Cancelled: Candidate face was not visible in camera preview for 3 consecutive warnings.';
+      setCancelReason(reason);
+      stopWebcam();
+      if (recognitionRef.current) recognitionRef.current.stop();
+      window.speechSynthesis?.cancel();
+
+      try {
+        await interviewsApi.cancelInterview(Number(interviewId), reason);
+      } catch (e) {
+        console.error('Failed to cancel interview on backend:', e);
+      }
+    }
+  };
+
   const fetchInterviewSession = async () => {
     try {
       const data = await interviewsApi.getInterview(interviewId);
       setInterview(data);
+      if (data.status === 'cancelled') {
+        setInterviewCancelled(true);
+        setCancelReason('Interview was cancelled due to academic integrity non-compliance.');
+      }
       if (data.tab_switch_count !== undefined && data.tab_switch_count !== null) setTabSwitchCount(data.tab_switch_count);
       if (data.paste_count !== undefined && data.paste_count !== null) setPasteCount(data.paste_count);
       if (data.integrity_score !== undefined && data.integrity_score !== null) setIntegrityScore(data.integrity_score);
-      if (data.questions && data.questions.length > 0) {
-        setTotalQuestions(data.questions.length);
-        const idx = data.current_question_index || 0;
-        setCurrentIndex(idx);
-        if (idx < data.questions.length) {
-          const q = data.questions[idx];
-          setCurrentQuestion(q);
-          speakQuestion(q.question_text);
-        } else {
-          setCompleted(true);
-        }
+      setTotalQuestions(5);
+      const idx = data.current_question_index || 0;
+      setCurrentIndex(idx);
+      if (idx < 5 && data.questions && data.questions.length > idx) {
+        const q = data.questions[idx];
+        setCurrentQuestion(q);
+        speakQuestion(q.question_text);
+      } else if (idx >= 5 || data.status === 'completed') {
+        setCompleted(true);
       }
     } catch (err) {
       const msg = err.message || '';
@@ -333,6 +446,51 @@ export default function InterviewRoom() {
     );
   }
 
+  if (interviewCancelled) {
+    return (
+      <div className="max-w-2xl mx-auto my-12 p-8 sm:p-10 rounded-2xl bg-rose-950/40 border-2 border-rose-600/80 text-center space-y-6 shadow-2xl backdrop-blur-md animate-fadeIn">
+        <div className="w-20 h-20 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto shadow-lg shadow-rose-600/20">
+          <ShieldAlert className="w-12 h-12 text-rose-500 animate-pulse" />
+        </div>
+        <div>
+          <span className="text-xs font-bold uppercase tracking-wider text-rose-400 px-3 py-1 rounded-full bg-rose-950 border border-rose-700">
+            Interview Auto-Cancelled (Status: Cancelled)
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-black text-white mt-4">
+            Session Cancelled Due to Proctoring Non-Compliance
+          </h2>
+          <p className="text-xs text-rose-200 mt-3 max-w-lg mx-auto leading-relaxed">
+            {cancelReason || 'Candidate face was not visible in camera preview for 3 consecutive warnings. As per the strict autonomous proctoring integrity protocol, this evaluation has been automatically cancelled.'}
+          </p>
+        </div>
+
+        <div className="bg-slate-900/90 border border-rose-900/80 rounded-xl p-4 text-left text-xs space-y-2">
+          <div className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Integrity Audit Record:</div>
+          <div className="text-rose-300 font-mono text-[11px] flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+            Face Visibility Violations: 3 of 3 warnings exceeded
+          </div>
+          <div className="text-slate-300 text-[11px]">
+            Final Recruiter Status: <span className="font-bold text-rose-400">Rejected (Proctoring Violation)</span>
+          </div>
+          <div className="text-slate-300 text-[11px]">
+            Integrity Score: <span className="font-bold text-rose-400">0.0%</span>
+          </div>
+        </div>
+
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <button
+            onClick={() => navigate('/candidate')}
+            className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Return to Candidate Portal
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       
@@ -352,6 +510,18 @@ export default function InterviewRoom() {
 
         {/* Progress & Voice Toggle & Proctoring */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* Face Warning Counter Badge */}
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold ${
+            faceWarningCount === 0 
+              ? 'bg-slate-900 border-slate-700 text-slate-300'
+              : faceWarningCount === 1
+              ? 'bg-amber-950/70 border-amber-700 text-amber-300'
+              : 'bg-rose-950/80 border-rose-700 text-rose-300 animate-pulse'
+          }`}>
+            <Video className="w-3.5 h-3.5" />
+            <span>Face Warnings: <strong className={faceWarningCount > 0 ? 'text-rose-400' : 'text-emerald-400'}>{faceWarningCount}/3</strong></span>
+          </div>
+
           {/* AI Proctoring Trust Badge */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
             integrityScore >= 85
@@ -389,6 +559,19 @@ export default function InterviewRoom() {
           </button>
         </div>
       </div>
+
+      {/* Real-time Face Visibility Warning Banner */}
+      {faceWarningMessage && (
+        <div className="bg-rose-950/95 border-2 border-rose-600 rounded-2xl p-4 text-rose-200 text-xs font-bold flex items-center justify-between shadow-2xl shadow-rose-950/50 animate-bounce">
+          <div className="flex items-center gap-3">
+            <ShieldAlert className="w-6 h-6 text-rose-400 shrink-0" />
+            <span>{faceWarningMessage}</span>
+          </div>
+          <span className="text-[11px] px-2.5 py-1 rounded-full bg-rose-900 border border-rose-500 text-white uppercase tracking-wider font-extrabold">
+            Warning {faceWarningCount}/3
+          </span>
+        </div>
+      )}
 
       {/* Real-time Proctoring Alert */}
       {proctoringWarning && (
@@ -508,6 +691,16 @@ export default function InterviewRoom() {
                     <span className="text-xs text-slate-500">Camera preview off</span>
                   </div>
                 )}
+
+                {/* Face visibility status badge inside webcam */}
+                <div className={`absolute top-3 left-3 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border backdrop-blur-sm ${
+                  faceWarningCount === 0
+                    ? 'bg-emerald-950/70 border-emerald-700 text-emerald-300'
+                    : 'bg-rose-950/90 border-rose-600 text-rose-200 animate-pulse'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${faceWarningCount === 0 ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
+                  <span>{faceWarningCount === 0 ? 'Face Detected' : `Face Warning ${faceWarningCount}/3`}</span>
+                </div>
                 
                 {/* Live speech indicator badge */}
                 {isListening && (

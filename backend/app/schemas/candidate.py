@@ -3,6 +3,7 @@ from typing import List, Optional, Any
 from datetime import datetime
 
 class CandidateBase(BaseModel):
+    name: Optional[str] = None
     extracted_skills: Optional[List[str]] = []
     education: Optional[List[Any]] = []
     experience: Optional[List[Any]] = []

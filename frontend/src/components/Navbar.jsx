@@ -65,17 +65,30 @@ export default function Navbar() {
             </Link>
 
             {(!user || user.role === 'candidate') && (
-              <Link
-                to="/candidate"
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                  isActive('/candidate')
-                    ? 'bg-slate-800 text-cyan-400'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                }`}
-              >
-                <UserCheck className="w-4 h-4" />
-                Candidate Portal
-              </Link>
+              <>
+                <Link
+                  to="/candidate"
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                    isActive('/candidate') && !location.search.includes('tab=profile')
+                      ? 'bg-slate-800 text-cyan-400'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Bot className="w-4 h-4" />
+                  AI Interviews
+                </Link>
+                <Link
+                  to="/candidate?tab=profile"
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                    isActive('/candidate') && location.search.includes('tab=profile')
+                      ? 'bg-slate-800 text-cyan-400'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  <UserCheck className="w-4 h-4" />
+                  Candidate Profile & History
+                </Link>
+              </>
             )}
 
             {user && (user.role === 'recruiter' || user.role === 'admin') && (

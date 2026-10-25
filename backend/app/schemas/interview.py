@@ -52,6 +52,7 @@ class InterviewOut(BaseModel):
     paste_count: Optional[int] = 0
     integrity_score: Optional[float] = 100.0
     recruiter_status: Optional[str] = "Pending"
+    proctoring_flags: Optional[List[str]] = []
 
     class Config:
         from_attributes = True
@@ -64,6 +65,9 @@ class InterviewStatusUpdate(BaseModel):
     status: Optional[str] = None # "Shortlisted", "On-Hold", "Rejected", "Pending"
     recruiter_status: Optional[str] = None
     notes: Optional[str] = ""
+
+class InterviewCancelPayload(BaseModel):
+    reason: Optional[str] = "Terminated: Face not visible for 3 warnings."
 
 class AnswerSubmit(BaseModel):
     interview_id: int

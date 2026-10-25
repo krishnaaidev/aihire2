@@ -20,7 +20,8 @@ from app.schemas.interview import (
     DynamicQuestionResponse, 
     QuestionOut,
     ProctoringEvent,
-    InterviewStatusUpdate
+    InterviewStatusUpdate,
+    InterviewCancelPayload
 )
 from app.services.question_generator import QuestionGenerator
 from app.services.answer_evaluator import AnswerEvaluator
@@ -77,7 +78,7 @@ async def create_interview(
     db.commit()
     db.refresh(interview)
 
-    # Generate personalized questions
+    # Generate initial personalized Question 1 based on resume and job (no pre-added batch)
     cand_skills = json.loads(candidate.extracted_skills or "[]")
     cand_exp = json.loads(candidate.experience or "[]")
     cand_proj = json.loads(candidate.projects or "[]")
@@ -90,7 +91,7 @@ async def create_interview(
         candidate_skills=cand_skills,
         candidate_experience=cand_exp,
         candidate_projects=cand_proj,
-        num_questions=5
+        num_questions=1
     )
 
     for q_data in questions_data:
@@ -100,7 +101,7 @@ async def create_interview(
             category=q_data["category"],
             difficulty=q_data["difficulty"],
             expected_key_points=json.dumps(q_data.get("expected_key_points", [])),
-            order_index=q_data["order_index"]
+            order_index=1
         )
         db.add(q)
 
@@ -171,18 +172,48 @@ async def submit_answer(
     interview.current_question_index += 1
     db.commit()
 
-    # Total questions
-    questions = db.query(Question).filter(Question.interview_id == interview.id).order_by(Question.order_index).all()
-    total_q = len(questions)
+    # Adaptive Next Question Generation (Max 5 Questions)
+    MAX_QUESTIONS = 5
 
-    # Check if more questions remain
-    if interview.current_question_index < total_q:
-        next_q = questions[interview.current_question_index]
+    if interview.current_question_index < MAX_QUESTIONS:
+        # Check if next question was already pre-seeded
+        existing_questions = db.query(Question).filter(Question.interview_id == interview.id).order_by(Question.order_index).all()
+        if interview.current_question_index < len(existing_questions):
+            next_q = existing_questions[interview.current_question_index]
+        else:
+            # Dynamically generate follow-up question based on candidate's answer and topic
+            cand = interview.candidate
+            job = interview.job
+            cand_skills = json.loads(cand.extracted_skills or "[]")
+            job_skills = json.loads(job.required_skills or "[]")
+
+            next_q_data = await QuestionGenerator.generate_adaptive_question_on_topic(
+                job_title=job.title,
+                required_skills=job_skills,
+                candidate_skills=cand_skills,
+                previous_question=question.question_text,
+                candidate_answer=answer_in.answer,
+                eval_feedback=eval_result.get("feedback", ""),
+                order_index=interview.current_question_index + 1
+            )
+
+            next_q = Question(
+                interview_id=interview.id,
+                question_text=next_q_data["question_text"],
+                category=next_q_data.get("category", "technical"),
+                difficulty=next_q_data.get("difficulty", "medium"),
+                expected_key_points=json.dumps(next_q_data.get("expected_key_points", [])),
+                order_index=interview.current_question_index + 1
+            )
+            db.add(next_q)
+            db.commit()
+            db.refresh(next_q)
+
         return DynamicQuestionResponse(
             completed=False,
             current_response_evaluation=eval_result,
             next_question=QuestionOut.model_validate(next_q),
-            total_questions=total_q,
+            total_questions=MAX_QUESTIONS,
             current_index=interview.current_question_index
         )
     else:
@@ -332,6 +363,43 @@ def update_interview_recruiter_status(
         "recruiter_status": interview.recruiter_status
     }
 
+@router.post("/{interview_id}/cancel")
+def cancel_interview(
+    interview_id: int,
+    payload: Optional[InterviewCancelPayload] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    reason = payload.reason if payload and payload.reason else "Terminated: Face not visible for 3 warnings."
+    interview.status = "cancelled"
+    interview.recruiter_status = "Rejected"
+    interview.integrity_score = 0.0
+
+    flags = json.loads(interview.proctoring_flags or "[]")
+    flags.append({
+        "event": "interview_cancelled",
+        "reason": reason,
+        "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    })
+    interview.proctoring_flags = json.dumps(flags)
+
+    if interview.report:
+        interview.report.decision_status = "Rejected"
+        interview.report.integrity_score = 0.0
+        interview.report.proctoring_summary = f"Session Terminated & Cancelled: {reason}"
+
+    db.commit()
+    return {
+        "status": "cancelled",
+        "message": reason,
+        "recruiter_status": interview.recruiter_status,
+        "integrity_score": interview.integrity_score
+    }
+
 @router.get("/job/{job_id}/export-csv")
 def export_job_candidates_csv(job_id: int, db: Session = Depends(get_db)):
     """Export evaluated candidates for a job (or all jobs if job_id=0) as a structured CSV."""
@@ -438,5 +506,6 @@ def _format_interview_out(interview: Interview, db: Session) -> InterviewOut:
         tab_switch_count=interview.tab_switch_count or 0,
         paste_count=interview.paste_count or 0,
         integrity_score=interview.integrity_score if interview.integrity_score is not None else 100.0,
-        recruiter_status=interview.recruiter_status or "Pending"
+        recruiter_status=interview.recruiter_status or "Pending",
+        proctoring_flags=json.loads(interview.proctoring_flags or "[]")
     )

@@ -153,13 +153,13 @@ export default function InterviewReportPage() {
               CT Institute of Engineering, Management and Technology
             </h2>
             <p className="text-xs text-slate-400">
-              Affiliated to I.K.G. Punjab Technical University • Under the guidance of <span className="text-slate-200 font-semibold">Er. Sukhdayal, Assistant Professor</span>
+              Affiliated to I.K.G. Punjab Technical University • Under the guidance of <span className="text-slate-200 font-semibold">Er. Sukhdayal, Assistant Professor</span> • Submitted by: <span className="text-cyan-400 font-bold">Suman Krishna</span>
             </p>
           </div>
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <span className="px-3 py-1.5 rounded-xl bg-cyan-950/80 border border-cyan-800 text-[11px] font-bold text-cyan-300">
-            AIHire Engine v2.0
+            Submitted by Suman Krishna
           </span>
         </div>
       </div>
@@ -487,12 +487,16 @@ export default function InterviewReportPage() {
 
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 print:text-slate-600 gap-4">
               <div className="text-left">
-                <span className="block font-bold text-white print:text-black">AIHire Autonomous Evaluation System</span>
-                <span className="text-[11px] text-slate-500">Autonomous Adaptive Grading & Proctoring Engine</span>
+                <span className="block font-bold text-white print:text-black">Submitted by: Suman Krishna</span>
+                <span className="text-[11px] text-slate-500">B.Tech CSE (Roll: 2301275) • CT Institute</span>
+              </div>
+              <div className="text-center sm:text-center">
+                <span className="block font-bold text-cyan-400 print:text-black">AIHire Autonomous Evaluation System</span>
+                <span className="text-[11px] text-slate-500">Autonomous Adaptive Grading & Proctoring</span>
               </div>
               <div className="text-right sm:text-right">
                 <span className="block font-bold text-white print:text-black">Er. Sukhdayal (Assistant Professor)</span>
-                <span className="text-[11px] text-slate-500">CT Institute of Engg, Mgmt & Tech • IKG PTU</span>
+                <span className="text-[11px] text-slate-500">Supervisor • CT Institute / IKG PTU</span>
               </div>
             </div>
           </div>

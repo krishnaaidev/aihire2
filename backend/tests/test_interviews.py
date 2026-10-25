@@ -111,5 +111,41 @@ def test_interview_requires_resume():
         assert "Test Candidate" in csv_res.text
         assert "Shortlisted" in csv_res.text
 
+        # 7. Test Face Visibility 3-Warning Auto-Cancellation
+        cancel_res = client.post(
+            f"/api/interviews/{interview_id}/cancel",
+            json={"reason": "Candidate face was not visible in camera preview for 3 consecutive warnings."},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert cancel_res.status_code == 200
+        cancel_data = cancel_res.json()
+        assert cancel_data["status"] == "cancelled"
+        assert cancel_data["recruiter_status"] == "Rejected"
+        assert cancel_data["integrity_score"] == 0.0
+
     finally:
         db.close()
+
+@pytest.mark.anyio
+async def test_adaptive_question_generation_on_candidate_reply():
+    from app.services.question_generator import QuestionGenerator
+    
+    # Candidate mentions Docker and Redis caching
+    candidate_reply = "I used Docker containers with Kubernetes, and implemented a Redis caching layer for fast key-value lookups."
+    
+    next_question = await QuestionGenerator.generate_adaptive_question_on_topic(
+        job_title="Backend Engineer",
+        required_skills=["Python", "Docker", "Redis"],
+        candidate_skills=["Python", "FastAPI"],
+        previous_question="Describe how you architected your recent distributed web service.",
+        candidate_answer=candidate_reply,
+        order_index=2
+    )
+    
+    assert next_question is not None
+    assert "question_text" in next_question
+    assert "category" in next_question
+    # The generated question should reference or build upon concepts from the candidate's answer
+    q_lower = next_question["question_text"].lower()
+    assert any(term in q_lower for term in ["redis", "caching", "docker", "kubernetes", "database", "latency", "ttl", "memory", "storage"])
+

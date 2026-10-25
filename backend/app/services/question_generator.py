@@ -117,48 +117,97 @@ Ensure questions are balanced across categories and deeply relevant to the candi
         return questions
 
     @classmethod
-    async def generate_dynamic_followup(
+    async def generate_adaptive_question_on_topic(
         cls,
-        question_text: str,
+        job_title: str,
+        required_skills: List[str],
+        candidate_skills: List[str],
+        previous_question: str,
         candidate_answer: str,
-        category: str,
-        order_index: int
+        eval_feedback: str = "",
+        order_index: int = 2
     ) -> Dict[str, Any]:
         """
-        Dynamically adapts interview by formulating an intelligent follow-up
-        deepening or clarifying previous candidate answer (Synopsis Section 8.6).
+        Dynamically analyzes the candidate's previous response, identifies the exact topic,
+        technologies, or architectural choices they discussed, and formulates an intelligent
+        follow-up question tailored to that topic (Max 5 questions per interview).
         """
         prompt = f"""
-As an AI interviewer, the previous question was:
-"{question_text}"
+You are the Lead Technical AI Interviewer on the AIHire platform.
+Candidate is interviewing for: {job_title}
+Key Job Requirements: {', '.join(required_skills[:6])}
+Candidate Profile Skills: {', '.join(candidate_skills[:8])}
 
-The candidate answered:
+Previous Question #{order_index - 1}:
+"{previous_question}"
+
+Candidate's Answer:
 "{candidate_answer}"
 
-Formulate a concise, sharp follow-up question that either asks for technical depth on a specific point they mentioned, or asks how they would handle edge-cases/failure scenarios.
-Return JSON with:
-- "question_text": follow-up question
-- "expected_key_points": list of key points
+AI Evaluation Feedback on Answer:
+"{eval_feedback}"
+
+YOUR TASK:
+Formulate Question #{order_index} (out of 5 max).
+Rules:
+1. Examine the candidate's answer and identify the exact topic, tools, architectural decisions, or practical approaches they mentioned.
+2. Directly base Question #{order_index} on that topic: probe deeper into the trade-offs, edge cases, scaling limits, failure modes, or real-world implementation challenges of the solution they proposed.
+3. Natural phrasing: reference what they just said (e.g. "You mentioned [concept/tool] in your response. How would you handle...").
+4. Return ONLY a valid JSON object with keys:
+   - "question_text": The personalized follow-up question text
+   - "category": One of ["technical", "scenario", "problem_solving", "architecture", "system_design"]
+   - "difficulty": One of ["medium", "hard"]
+   - "expected_key_points": list of 3-4 specific concepts expected
 """
-        llm_resp = await AIProvider.generate_text(prompt, "You are an adaptive AI interviewer.")
+        llm_resp = await AIProvider.generate_text(prompt, "You are an expert technical interviewer.")
         if llm_resp:
             try:
                 clean_json = re.sub(r'```json\s*|\s*```', '', llm_resp).strip()
                 parsed = json.loads(clean_json)
-                return {
-                    "question_text": parsed.get("question_text", f"Could you dive deeper into that? Specifically, how would you test and validate that approach in a high-scale environment?"),
-                    "category": category,
-                    "difficulty": "hard",
-                    "expected_key_points": parsed.get("expected_key_points", ["Edge cases", "Scalability", "Testing"]),
-                    "order_index": order_index
-                }
+                if parsed.get("question_text"):
+                    return {
+                        "question_text": parsed.get("question_text"),
+                        "category": parsed.get("category", "technical"),
+                        "difficulty": parsed.get("difficulty", "medium"),
+                        "expected_key_points": parsed.get("expected_key_points", ["Architecture", "Edge cases", "Trade-offs"]),
+                        "order_index": order_index
+                    }
             except Exception:
                 pass
 
+        # Contextual Topic Extractor Fallback
+        lower_ans = candidate_answer.lower()
+        if any(w in lower_ans for w in ["database", "sql", "query", "postgres", "mongo", "table", "data"]):
+            topic_q = "In your answer, you highlighted database operations. How would you design the indexing strategy, handle connection pooling, and prevent lock contention as concurrent traffic spikes 10x?"
+            category = "technical"
+            points = ["Indexing strategy", "Connection pooling", "Lock contention & transactions"]
+        elif any(w in lower_ans for w in ["api", "rest", "graphql", "endpoint", "microservice", "service", "backend"]):
+            topic_q = "You discussed API and service architecture. What strategies would you use for rate limiting, idempotent request processing, and graceful circuit breaking during downstream outages?"
+            category = "architecture"
+            points = ["Rate limiting", "Idempotency", "Circuit breaker pattern"]
+        elif any(w in lower_ans for w in ["cache", "redis", "memory", "performance", "latency", "speed"]):
+            topic_q = "You mentioned performance and caching mechanisms. How would you prevent cache stampedes, manage distributed cache invalidation, and ensure data consistency across multi-region deployments?"
+            category = "system_design"
+            points = ["Cache stampede mitigation", "Cache invalidation", "Eventual consistency"]
+        elif any(w in lower_ans for w in ["test", "ci/cd", "deploy", "docker", "cloud", "aws", "kubernetes"]):
+            topic_q = "You referenced deployment and validation procedures. How would you structure automated regression testing and canary rollouts to guarantee zero-downtime deployments in a mission-critical setup?"
+            category = "scenario"
+            points = ["Canary deployments", "Automated regression tests", "Zero-downtime rollback"]
+        elif any(w in lower_ans for w in ["state", "react", "component", "frontend", "ui", "render"]):
+            topic_q = "You mentioned state management and user interface architecture. How do you prevent unnecessary re-renders, manage asynchronous side-effects, and ensure accessibility (WCAG) compliance in complex workflows?"
+            category = "technical"
+            points = ["Render optimization", "Async side-effect handling", "Accessibility"]
+        else:
+            # Fallback based on job and skills
+            fallback_skill = required_skills[0] if required_skills else "System Architecture"
+            topic_q = f"Building on your response, what architectural trade-offs or constraints have you encountered when applying {fallback_skill} in production, and how did you measure success?"
+            category = "technical"
+            points = ["Architectural trade-offs", "Production constraints", "Performance metrics"]
+
         return {
-            "question_text": f"That is an interesting solution. Could you elaborate on how you would validate the correctness and monitor latency in production for that approach?",
+            "question_text": topic_q,
             "category": category,
-            "difficulty": "hard",
-            "expected_key_points": ["Monitoring", "Unit/Integration tests", "Resilience"],
+            "difficulty": "hard" if order_index >= 3 else "medium",
+            "expected_key_points": points,
             "order_index": order_index
         }
