@@ -716,3 +716,191 @@ def seed_database(db: Session, force: bool = False):
     total_jobs = db.query(Job).count()
     print(f"Database verified: {total_jobs} total active job requisitions (added {new_jobs_added} new roles). Candidate accounts preserved.")
 
+    # Seed curated candidates and interview telemetry if fewer than 3 candidates exist
+    if db.query(Candidate).count() < 3:
+        SAMPLE_CANDIDATES = [
+            {
+                "name": "Suman Krishna",
+                "email": "suman.krishna@aihire.com",
+                "phone": "+91 98765 43210",
+                "resume_filename": "Suman_Krishna_Resume_2026.pdf",
+                "skills": ["Python", "SQL", "FastAPI", "React", "Machine Learning", "Power BI", "Docker", "Git"],
+                "education": ["B.Tech in Computer Science & Engineering, CT Institute (2022-2026)", "Class XII, CBSE (91.4%)"],
+                "experience": ["GenAI & Backend Engineering Intern at EduTech Systems", "Data Science Intern at Averixis Analytics"],
+                "projects": ["AIHire Autonomous AI Interview Platform", "High-Throughput Financial Sentiment NLP Engine"],
+                "linkedin": "https://linkedin.com/in/suman-krishna",
+                "github": "https://github.com/krishnaaidev",
+                "portfolio": "https://sumankrishna.dev",
+                "interviews": [
+                    {
+                        "job_index": 0,
+                        "status": "completed",
+                        "score": 89.5,
+                        "integrity": 100.0,
+                        "recruiter_status": "Selected",
+                        "mode": "voice"
+                    },
+                    {
+                        "job_index": 1,
+                        "status": "in_progress",
+                        "score": 0.0,
+                        "integrity": 100.0,
+                        "recruiter_status": "Pending",
+                        "mode": "text"
+                    }
+                ]
+            },
+            {
+                "name": "Aarav Sharma",
+                "email": "aarav.sharma@aihire.com",
+                "phone": "+91 98112 34567",
+                "resume_filename": "Aarav_Sharma_FullStack.pdf",
+                "skills": ["Python", "Django", "React", "PostgreSQL", "AWS", "REST APIs", "Redis", "Docker"],
+                "education": ["B.Tech in Information Technology, DTU (2020-2024)"],
+                "experience": ["Software Engineer at CloudScale Technologies (2 years)"],
+                "projects": ["Distributed E-Commerce Microservices", "Real-Time Chat Engine"],
+                "linkedin": "https://linkedin.com/in/aarav-sharma-dev",
+                "github": "https://github.com/aaravsharma",
+                "portfolio": "https://aaravsharma.io",
+                "interviews": [
+                    {
+                        "job_index": 0,
+                        "status": "completed",
+                        "score": 85.0,
+                        "integrity": 95.0,
+                        "recruiter_status": "Shortlisted",
+                        "mode": "text"
+                    }
+                ]
+            },
+            {
+                "name": "Priya Patel",
+                "email": "priya.patel@aihire.com",
+                "phone": "+91 97234 56789",
+                "resume_filename": "Priya_Patel_Mechanical_Design.pdf",
+                "skills": ["SolidWorks", "ANSYS FEA", "GD&T", "Thermodynamics", "AutoCAD", "DFM/DFA", "Catia"],
+                "education": ["B.Tech in Mechanical Engineering, COEP Pune (2020-2024)"],
+                "experience": ["Design Engineer Trainee at Tata Motors (1.5 years)"],
+                "projects": ["Formula Student Racecar Chassis Stress Analysis", "Industrial Heat Exchanger Optimization"],
+                "linkedin": "https://linkedin.com/in/priya-patel-mech",
+                "github": "https://github.com/priyapatel-design",
+                "portfolio": "",
+                "interviews": [
+                    {
+                        "job_index": 0,
+                        "status": "completed",
+                        "score": 88.0,
+                        "integrity": 100.0,
+                        "recruiter_status": "Selected",
+                        "mode": "voice"
+                    }
+                ]
+            },
+            {
+                "name": "Rohan Verma",
+                "email": "rohan.verma@aihire.com",
+                "phone": "+91 96543 21098",
+                "resume_filename": "Rohan_Verma_Civil_BIM.pdf",
+                "skills": ["STAAD.Pro", "ETABS", "BIM (Revit)", "Concrete Design", "Steel Structures", "AutoCAD"],
+                "education": ["B.Tech in Civil Engineering, NIT Trichy (2019-2023)"],
+                "experience": ["Junior Structural Engineer at L&T Construction (2 years)"],
+                "projects": ["Seismic Vulnerability Modeling of High-Rise Buildings", "Metro Viaduct RCC Detailing"],
+                "linkedin": "https://linkedin.com/in/rohan-verma-civil",
+                "github": "",
+                "portfolio": "",
+                "interviews": [
+                    {
+                        "job_index": 2,
+                        "status": "completed",
+                        "score": 78.5,
+                        "integrity": 92.0,
+                        "recruiter_status": "Shortlisted",
+                        "mode": "text"
+                    }
+                ]
+            },
+            {
+                "name": "Vikramaditya Roy",
+                "email": "vikram.roy@aihire.com",
+                "phone": "+91 95432 10987",
+                "resume_filename": "Vikram_Roy_CSE_Resume.pdf",
+                "skills": ["Python", "Java", "SQL", "HTML/CSS"],
+                "education": ["B.Tech CSE, Amity University (2021-2025)"],
+                "experience": ["Academic projects and coding bootcamp"],
+                "projects": ["Library Management Web App"],
+                "linkedin": "https://linkedin.com/in/vikram-roy-dev",
+                "github": "https://github.com/vikramroy",
+                "portfolio": "",
+                "interviews": [
+                    {
+                        "job_index": 0,
+                        "status": "cancelled",
+                        "score": 0.0,
+                        "integrity": 0.0,
+                        "recruiter_status": "Rejected (Proctoring Violation)",
+                        "mode": "voice",
+                        "flags": [
+                            {
+                                "type": "prohibited_object",
+                                "reason": "Prohibited object detected: mobile phone in camera preview. Retake strictly prohibited.",
+                                "action": "interview_cancelled",
+                                "retake_allowed": False
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+
+        all_jobs = db.query(Job).all()
+        for c_data in SAMPLE_CANDIDATES:
+            user = db.query(User).filter(User.email == c_data["email"]).first()
+            if not user:
+                user = User(
+                    name=c_data["name"],
+                    email=c_data["email"],
+                    password_hash=default_pwd_hash,
+                    role="candidate"
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+
+            cand = db.query(Candidate).filter(Candidate.user_id == user.id).first()
+            if not cand:
+                cand = Candidate(
+                    user_id=user.id,
+                    resume_filename=c_data["resume_filename"],
+                    resume_text=f"Sample resume content for {c_data['name']}",
+                    extracted_skills=json.dumps(c_data["skills"]),
+                    education=json.dumps(c_data["education"]),
+                    experience=json.dumps(c_data["experience"]),
+                    projects=json.dumps(c_data["projects"]),
+                    phone=c_data["phone"],
+                    linkedin_url=c_data["linkedin"],
+                    github_url=c_data["github"],
+                    portfolio_url=c_data["portfolio"]
+                )
+                db.add(cand)
+                db.commit()
+                db.refresh(cand)
+
+                if all_jobs:
+                    for iv_info in c_data.get("interviews", []):
+                        job_target = all_jobs[min(iv_info.get("job_index", 0), len(all_jobs) - 1)]
+                        flags = iv_info.get("flags", [])
+                        iv = Interview(
+                            candidate_id=cand.id,
+                            job_id=job_target.id,
+                            mode=iv_info.get("mode", "text"),
+                            status=iv_info.get("status", "completed"),
+                            overall_score=iv_info.get("score", 0.0),
+                            integrity_score=iv_info.get("integrity", 100.0),
+                            recruiter_status=iv_info.get("recruiter_status", "Pending"),
+                            proctoring_flags=json.dumps(flags),
+                            current_question_index=5 if iv_info.get("status") == "completed" else 2
+                        )
+                        db.add(iv)
+                        db.commit()
+        print("Curated sample candidates and interview telemetry seeded.")
+
