@@ -35,7 +35,10 @@ import {
   TrendingUp,
   Cpu,
   BarChart3,
-  CheckCircle
+  CheckCircle,
+  Ban,
+  Lock,
+  PhoneOff
 } from 'lucide-react';
 
 export default function CandidatePortal() {
@@ -135,6 +138,14 @@ export default function CandidatePortal() {
   };
 
   const handleStartInterview = async (jobId, mode = 'text') => {
+    // Check if candidate already has a cancelled interview for this job (permanent disqualification)
+    const cancelledIv = myInterviews.find((iv) => iv.job_id === jobId && iv.status === 'cancelled');
+    if (cancelledIv) {
+      setMatchingJob(null);
+      setSelectedCancelledIv(cancelledIv);
+      return;
+    }
+
     if (!profile?.resume_filename) {
       setMatchingJob(null);
       setShowResumeRequiredModal(true);
@@ -149,6 +160,8 @@ export default function CandidatePortal() {
       if (msg.toLowerCase().includes('resume')) {
         setMatchingJob(null);
         setShowResumeRequiredModal(true);
+      } else if (msg.toLowerCase().includes('permanently cancelled') || msg.toLowerCase().includes('disqualified') || msg.toLowerCase().includes('retake')) {
+        alert(msg);
       } else {
         alert('Failed to launch interview session: ' + msg);
       }
@@ -595,13 +608,30 @@ export default function CandidatePortal() {
                           <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
                           Fit Breakdown
                         </button>
-                        <button
-                          onClick={() => handleStartInterview(job.id, 'text')}
-                          className="py-2 px-3 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-slate-950" />
-                          Start Interview
-                        </button>
+                        {(() => {
+                          const cancelledIv = myInterviews.find((iv) => iv.job_id === job.id && iv.status === 'cancelled');
+                          if (cancelledIv) {
+                            return (
+                              <button
+                                onClick={() => setSelectedCancelledIv(cancelledIv)}
+                                className="py-2 px-3 rounded-xl text-xs font-bold bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 flex items-center justify-center gap-1.5 transition-all shadow-md shadow-rose-950/30"
+                                title="Candidate Disqualified: Malpractice detected during session (mobile phone or face movement). Retake strictly prohibited."
+                              >
+                                <Ban className="w-3.5 h-3.5 text-rose-400" />
+                                Disqualified
+                              </button>
+                            );
+                          }
+                          return (
+                            <button
+                              onClick={() => handleStartInterview(job.id, 'text')}
+                              className="py-2 px-3 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-slate-950" />
+                              Start Interview
+                            </button>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -1185,8 +1215,8 @@ export default function CandidatePortal() {
           <div className="bg-slate-900 border border-rose-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <h3 className="text-base font-bold text-rose-400 flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-rose-400" />
-                Session Cancellation Audit
+                <Ban className="w-5 h-5 text-rose-400" />
+                Session Disqualification Audit Record
               </h3>
               <button
                 onClick={() => setSelectedCancelledIv(null)}
@@ -1199,16 +1229,23 @@ export default function CandidatePortal() {
             <div className="text-xs space-y-3">
               <div className="bg-rose-950/40 border border-rose-900/60 p-3.5 rounded-xl text-rose-200">
                 <span className="font-bold block text-rose-300 uppercase text-[10px] tracking-wider mb-1">
-                  Reason for Automatic Termination:
+                  Reason for Automatic Termination & Disqualification:
                 </span>
-                Face Not Visible Violation: Candidate face was absent from camera preview for 3 consecutive warnings during the autonomous session.
+                {Array.isArray(selectedCancelledIv.proctoring_flags) && selectedCancelledIv.proctoring_flags.length > 0
+                  ? selectedCancelledIv.proctoring_flags[selectedCancelledIv.proctoring_flags.length - 1].reason
+                  : "Academic integrity violation: Prohibited object (mobile phone), suspicious face movement, or proctoring absence detected during session."}
               </div>
 
               <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60 space-y-1.5 text-slate-300">
                 <div>Role: <strong className="text-white">{selectedCancelledIv.job_title}</strong></div>
                 <div>Session ID: <strong className="font-mono text-cyan-300">#{selectedCancelledIv.id}</strong></div>
-                <div>Integrity Score: <strong className="text-rose-400">0.0%</strong></div>
-                <div>Recruiter Decision: <strong className="text-rose-400">Rejected (Proctoring Violation)</strong></div>
+                <div>Integrity Trust Score: <strong className="text-rose-400 font-mono">0.0%</strong></div>
+                <div>Recruiter Decision: <strong className="text-rose-400 font-bold">Rejected (Proctoring Violation)</strong></div>
+                <div>Retake Status: <strong className="text-rose-400 font-bold">Permanently Disqualified (Locked)</strong></div>
+              </div>
+
+              <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl text-[11px] text-slate-400 leading-relaxed">
+                In accordance with AIHire strict academic integrity regulations, any candidate caught with a mobile phone/unauthorized device or displaying evasive face movement is permanently barred from retaking or giving this interview again.
               </div>
             </div>
 
@@ -1285,12 +1322,22 @@ export default function CandidatePortal() {
                   >
                     Close
                   </button>
-                  <button
-                    onClick={() => handleStartInterview(matchingJob.id, 'text')}
-                    className="px-5 py-2 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20"
-                  >
-                    Proceed to AI Interview
-                  </button>
+                  {myInterviews.some((iv) => iv.job_id === matchingJob.id && iv.status === 'cancelled') ? (
+                    <button
+                      disabled
+                      className="px-5 py-2 rounded-xl text-xs font-bold bg-rose-950/80 text-rose-300 border border-rose-800 cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      <Ban className="w-3.5 h-3.5 text-rose-400" />
+                      Disqualified (Retake Prohibited)
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleStartInterview(matchingJob.id, 'text')}
+                      className="px-5 py-2 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20"
+                    >
+                      Proceed to AI Interview
+                    </button>
+                  )}
                 </div>
               </div>
             ) : null}

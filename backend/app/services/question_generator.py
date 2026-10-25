@@ -1,5 +1,6 @@
 import json
 import re
+import random
 from typing import List, Dict, Any, Optional
 from app.services.ai_provider import AIProvider
 
@@ -7,26 +8,44 @@ DEFAULT_QUESTION_BANK = [
     {
         "category": "technical",
         "difficulty": "medium",
-        "text_template": "Can you explain how you have utilized {skill} in your recent projects, and how it handles concurrency or performance bottlenecks?",
-        "expected_key_points": ["Architecture/usage pattern", "Performance considerations", "Error handling or state management"]
+        "text_template": "Can you explain how you have utilized {skill} in your recent projects, and how it handles concurrency, state synchronization, or performance bottlenecks?",
+        "expected_key_points": ["Architecture/usage pattern", "Concurrency & performance considerations", "Error handling or state management"]
     },
     {
         "category": "conceptual",
         "difficulty": "medium",
-        "text_template": "How does {skill} differ fundamentally from alternative technologies in the ecosystem, and what architectural trade-offs do you consider when choosing it?",
-        "expected_key_points": ["Core architectural philosophy", "Trade-offs and advantages", "Best practices"]
+        "text_template": "How does {skill} differ fundamentally from alternative technologies or paradigms in the ecosystem, and what architectural trade-offs do you consider when choosing it?",
+        "expected_key_points": ["Core architectural philosophy", "Trade-offs and advantages", "Best practices and constraints"]
     },
     {
         "category": "project",
         "difficulty": "hard",
-        "text_template": "Walk me through the most technically challenging software system or project you worked on involving {skill}. What was the architecture and how did you overcome the primary obstacle?",
+        "text_template": "Walk me through the most technically challenging software system or project you worked on involving {skill}. What was the internal architecture and how did you overcome the primary roadblock?",
         "expected_key_points": ["Problem statement", "System architecture", "Technical challenge solved", "Measurable outcome"]
     },
     {
         "category": "scenario",
         "difficulty": "hard",
-        "text_template": "Imagine our production service built with {role_tech} experiences sudden latency spikes and memory leaks during peak traffic. Walk me step-by-step through your debugging and mitigation approach.",
+        "text_template": "Imagine our production service built with {role_tech} experiences sudden latency spikes, thread starvation, and memory leaks during peak traffic. Walk me step-by-step through your debugging and mitigation approach.",
         "expected_key_points": ["Observability & profiling (metrics, logs, traces)", "Root cause isolation", "Short-term mitigation vs permanent fix"]
+    },
+    {
+        "category": "system_design",
+        "difficulty": "hard",
+        "text_template": "If you had to design a distributed, fault-tolerant ingestion pipeline leveraging {skill} that processes millions of events per second with exactly-once semantics, how would you architect it?",
+        "expected_key_points": ["Distributed partitioning & queuing", "Idempotency & transaction log", "Backpressure and fault tolerance"]
+    },
+    {
+        "category": "debugging",
+        "difficulty": "medium",
+        "text_template": "Describe a difficult bug, race condition, or memory regression you encountered while implementing {skill}. How did you trace, reproduce, and resolve it?",
+        "expected_key_points": ["Diagnostic process", "Tooling used (profiler, debugger, logs)", "Root cause and regression prevention"]
+    },
+    {
+        "category": "security",
+        "difficulty": "medium",
+        "text_template": "When deploying services utilizing {skill}, what security vulnerabilities (e.g. injection, auth bypass, CSRF/XSS, insecure deserialization) do you actively audit and guard against?",
+        "expected_key_points": ["Threat modeling", "Authentication & authorization", "Data sanitization & encryption"]
     },
     {
         "category": "behavioral",
@@ -50,31 +69,34 @@ class QuestionGenerator:
         num_questions: int = 5
     ) -> List[Dict[str, Any]]:
         """
-        Generates personalized questions matching Synopsis Section 8.5:
-        - Technical questions
-        - Conceptual questions
-        - Scenario-based questions
-        - Project-based questions
-        - Behavioral questions
+        Generates and shuffles personalized interview questions matching Synopsis Section 8.5.
+        Randomizes question sequence, templates, and focal skills so no two interviews are identical.
         """
-        skills_to_use = candidate_skills if candidate_skills else required_skills
+        # Randomize skills order for fresh question angles
+        shuffled_cand_skills = list(candidate_skills) if candidate_skills else []
+        random.shuffle(shuffled_cand_skills)
+        shuffled_req_skills = list(required_skills) if required_skills else ["Computer Science"]
+        random.shuffle(shuffled_req_skills)
+
+        skills_to_use = shuffled_cand_skills if shuffled_cand_skills else shuffled_req_skills
         primary_skill = skills_to_use[0] if skills_to_use else "Software Architecture"
         secondary_skill = skills_to_use[1] if len(skills_to_use) > 1 else primary_skill
-        role_tech = f"{job_title} ({', '.join(required_skills[:3])})"
+        role_tech = f"{job_title} ({', '.join(shuffled_req_skills[:3])})"
 
         # 1. Try LLM generation if available
         prompt = f"""
 You are the AI Interviewer for AIHire platform.
-Generate a structured set of {num_questions} personalized interview questions for:
+Generate a randomized, structured set of {num_questions} personalized interview questions for:
 - Role: {job_title}
-- Required Skills: {', '.join(required_skills)}
+- Required Skills: {', '.join(shuffled_req_skills)}
 - Experience Level: {experience_level}
-- Candidate Skills: {', '.join(candidate_skills[:8])}
+- Candidate Skills: {', '.join(shuffled_cand_skills[:8])}
 - Candidate Projects: {candidate_projects[:2]}
 
+CRITICAL: Randomly shuffle the question sequence and topics. Do not use a fixed question pattern.
 Generate a valid JSON array of objects with keys:
 - "question_text": The personalized question text
-- "category": One of ["technical", "conceptual", "project", "scenario", "behavioral"]
+- "category": One of ["technical", "conceptual", "project", "scenario", "system_design", "debugging", "behavioral"]
 - "difficulty": One of ["easy", "medium", "hard"]
 - "expected_key_points": list of 3-4 key concepts the candidate should cover
 
@@ -85,7 +107,9 @@ Ensure questions are balanced across categories and deeply relevant to the candi
             try:
                 clean_json = re.sub(r'```json\s*|\s*```', '', llm_resp).strip()
                 parsed = json.loads(clean_json)
-                if isinstance(parsed, list) and len(parsed) >= 3:
+                if isinstance(parsed, list) and len(parsed) >= 1:
+                    # Randomly shuffle questions
+                    random.shuffle(parsed)
                     questions = []
                     for i, q in enumerate(parsed[:num_questions]):
                         questions.append({
@@ -99,9 +123,11 @@ Ensure questions are balanced across categories and deeply relevant to the candi
             except Exception:
                 pass
 
-        # 2. Contextual fallback template generation
+        # 2. Contextual fallback template generation with random shuffling
         questions = []
-        templates = DEFAULT_QUESTION_BANK
+        templates = list(DEFAULT_QUESTION_BANK)
+        random.shuffle(templates)
+
         for i in range(min(num_questions, len(templates))):
             t = templates[i]
             skill = secondary_skill if i % 2 == 1 else primary_skill
@@ -113,6 +139,11 @@ Ensure questions are balanced across categories and deeply relevant to the candi
                 "expected_key_points": t["expected_key_points"],
                 "order_index": i + 1
             })
+
+        # Final shuffle of questions
+        random.shuffle(questions)
+        for i, q in enumerate(questions):
+            q["order_index"] = i + 1
 
         return questions
 

@@ -136,10 +136,14 @@ export const interviewsApi = {
       method: 'PATCH',
       body: JSON.stringify({ recruiter_status: recruiterStatus }),
     }),
-  cancelInterview: (interviewId, reason) =>
+  cancelInterview: (interviewId, reason, violationType = 'malpractice') =>
     apiRequest(`/interviews/${interviewId}/cancel`, {
       method: 'POST',
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({ reason, violation_type: violationType, permanent_disqualification: true }),
+    }),
+  shuffleQuestions: (interviewId) =>
+    apiRequest(`/interviews/${interviewId}/shuffle-questions`, {
+      method: 'POST',
     }),
   getExportCsvUrl: (jobId = 'all') => `${API_BASE}/interviews/job/${jobId}/export-csv`,
   downloadExportCsv: async (jobId = 'all') => {

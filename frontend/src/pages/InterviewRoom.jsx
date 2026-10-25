@@ -20,7 +20,11 @@ import {
   ArrowLeft,
   ShieldAlert,
   Upload,
-  RotateCcw
+  RotateCcw,
+  Ban,
+  PhoneOff,
+  Lock,
+  Shuffle
 } from 'lucide-react';
 
 export default function InterviewRoom() {
@@ -56,18 +60,68 @@ export default function InterviewRoom() {
   const [proctoringWarning, setProctoringWarning] = useState(null);
   const lastEventTimeRef = useRef(0);
 
-  // Face Detection & Warning States (3 warnings then auto-cancelled)
-  const [faceWarningCount, setFaceWarningCount] = useState(0);
+  // In-Camera Object Detection (Mobile Phone) & Face Movement Tracking
   const [interviewCancelled, setInterviewCancelled] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [faceWarningMessage, setFaceWarningMessage] = useState(null);
+  const [isAiVisionReady, setIsAiVisionReady] = useState(false);
+  const [shuffleNotice, setShuffleNotice] = useState(null);
+  const [isShuffling, setIsShuffling] = useState(false);
+
   const faceMissingTimerRef = useRef(0);
   const faceDetectorRef = useRef(null);
+  const objectDetectorRef = useRef(null);
+  const lastFaceBoxRef = useRef(null);
+  const faceMovementViolationsRef = useRef(0);
+  const objectDetectionViolationsRef = useRef(0);
 
   // References
   const videoRef = useRef(null);
   const recognitionRef = useRef(null);
   const preSpeechTextRef = useRef('');
+
+  // Dynamically load TensorFlow.js and COCO-SSD for client-side device & phone detection
+  useEffect(() => {
+    let isMounted = true;
+    const loadVisionModel = async () => {
+      try {
+        if (!window.cocoSsd && !window.tf) {
+          const tfScript = document.createElement('script');
+          tfScript.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js';
+          tfScript.async = true;
+          document.body.appendChild(tfScript);
+
+          tfScript.onload = () => {
+            const cocoScript = document.createElement('script');
+            cocoScript.src = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js';
+            cocoScript.async = true;
+            document.body.appendChild(cocoScript);
+
+            cocoScript.onload = async () => {
+              if (window.cocoSsd && isMounted) {
+                try {
+                  const model = await window.cocoSsd.load({ base: 'lite_mobilenet_v2' });
+                  objectDetectorRef.current = model;
+                  setIsAiVisionReady(true);
+                } catch (err) {
+                  console.warn('COCO-SSD load err:', err);
+                }
+              }
+            };
+          };
+        } else if (window.cocoSsd) {
+          const model = await window.cocoSsd.load({ base: 'lite_mobilenet_v2' });
+          objectDetectorRef.current = model;
+          setIsAiVisionReady(true);
+        }
+      } catch (e) {
+        console.warn('AI Vision load warning:', e);
+      }
+    };
+
+    loadVisionModel();
+    return () => { isMounted = false; };
+  }, []);
 
   // Pre-load Web Speech API voices
   useEffect(() => {
@@ -187,99 +241,235 @@ export default function InterviewRoom() {
 
     if ('FaceDetector' in window && !faceDetectorRef.current) {
       try {
-        faceDetectorRef.current = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+        faceDetectorRef.current = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 3 });
       } catch (e) {
         console.log('Native FaceDetector error:', e);
       }
     }
 
     const interval = setInterval(async () => {
-      let faceDetected = true;
-
-      // Check if camera is deactivated or stream paused
+      // 1. Camera Active Check
       if (!isCameraActive || !videoRef.current || videoRef.current.readyState < 2) {
-        faceDetected = false;
-      } else {
-        const video = videoRef.current;
-        if (faceDetectorRef.current) {
-          try {
-            const faces = await faceDetectorRef.current.detect(video);
-            faceDetected = faces && faces.length > 0;
-          } catch {
-            faceDetected = true;
+        faceMissingTimerRef.current += 1;
+        if (faceMissingTimerRef.current >= 3) {
+          handleMalpracticeDisqualification(
+            "🚨 Camera Stream Interrupted: Video preview must remain continuously active throughout the proctored interview. Retake is prohibited.",
+            "camera_interrupted"
+          );
+        }
+        return;
+      }
+
+      const video = videoRef.current;
+
+      // 2. In-Camera Object Detection (Mobile Phone & Prohibited Items)
+      if (objectDetectorRef.current) {
+        try {
+          const predictions = await objectDetectorRef.current.detect(video);
+          for (const pred of predictions) {
+            const cls = (pred.class || '').toLowerCase();
+            if (pred.score >= 0.40 && (cls === 'cell phone' || cls === 'remote' || cls === 'book' || cls === 'laptop')) {
+              handleMalpracticeDisqualification(
+                `🚨 Prohibited Object Detected: ${cls === 'cell phone' ? 'Mobile Phone' : cls} was detected in camera view! Academic integrity rules strictly prohibit electronic devices during the interview. You are permanently disqualified from retaking this interview.`,
+                'mobile_phone_detected'
+              );
+              return;
+            }
+          }
+        } catch (objErr) {
+          console.warn('Object detector inspection warning:', objErr);
+        }
+      }
+
+      // Computer Vision Canvas Heuristic for handheld mobile devices
+      try {
+        const cvCanvas = document.createElement('canvas');
+        cvCanvas.width = 64;
+        cvCanvas.height = 48;
+        const cvCtx = cvCanvas.getContext('2d');
+        cvCtx.drawImage(video, 0, 0, 64, 48);
+        const frameData = cvCtx.getImageData(0, 0, 64, 48).data;
+
+        // Inspect lower frame / hand zone for high-contrast rectangular device screen
+        let deviceHighlightCount = 0;
+        for (let y = 24; y < 46; y++) {
+          for (let x = 8; x < 56; x++) {
+            const idx = (y * 64 + x) * 4;
+            const r = frameData[idx], g = frameData[idx + 1], b = frameData[idx + 2];
+            const lum = r * 0.299 + g * 0.587 + b * 0.114;
+            if (lum < 22 || (lum > 225 && Math.abs(r - b) < 12)) {
+              deviceHighlightCount++;
+            }
+          }
+        }
+        if (deviceHighlightCount > 240) {
+          objectDetectionViolationsRef.current = (objectDetectionViolationsRef.current || 0) + 1;
+          if (objectDetectionViolationsRef.current >= 2) {
+            handleMalpracticeDisqualification(
+              "🚨 Prohibited Object Detected: Mobile phone / electronic device detected in camera frame! Interview permanently cancelled and retake is prohibited.",
+              "mobile_phone_detected"
+            );
+            return;
           }
         } else {
-          // Offscreen canvas frame analysis: check for camera obstruction or dark frame
-          try {
-            const canvas = document.createElement('canvas');
-            canvas.width = 40;
-            canvas.height = 30;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, 40, 30);
-            const imgData = ctx.getImageData(0, 0, 40, 30);
-            const data = imgData.data;
-            let totalLum = 0;
-            for (let i = 0; i < data.length; i += 4) {
-              totalLum += (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
-            }
-            const avgLum = totalLum / (data.length / 4);
-            faceDetected = avgLum >= 10;
-          } catch {
+          objectDetectionViolationsRef.current = 0;
+        }
+      } catch (cvErr) {
+        // CV fallback
+      }
+
+      // 3. Face Movement Tracking & Multi-Face Detection
+      let faceDetected = false;
+
+      if (faceDetectorRef.current) {
+        try {
+          const faces = await faceDetectorRef.current.detect(video);
+          if (!faces || faces.length === 0) {
+            faceDetected = false;
+          } else if (faces.length > 1) {
+            // Multiple individuals in frame
+            handleMalpracticeDisqualification(
+              "🚨 Malpractice Detected: Multiple individuals detected in camera view. The interview must be conducted strictly alone. Retake is prohibited.",
+              "multiple_faces_detected"
+            );
+            return;
+          } else {
             faceDetected = true;
+            faceMissingTimerRef.current = 0;
+
+            const box = faces[0].boundingBox;
+            const vW = video.videoWidth || 640;
+            const vH = video.videoHeight || 480;
+            const cx = (box.x + box.width / 2) / vW;
+            const cy = (box.y + box.height / 2) / vH;
+
+            if (lastFaceBoxRef.current) {
+              const prev = lastFaceBoxRef.current;
+              const deltaX = Math.abs(cx - prev.cx);
+              const deltaY = Math.abs(cy - prev.cy);
+
+              // Detect candidate looking away sideways (yaw) or dipping head down towards phone
+              const isLookingAway = cx < 0.18 || cx > 0.82 || cy > 0.82;
+              const isExcessiveMovement = deltaX > 0.28 || deltaY > 0.30;
+
+              if (isLookingAway || isExcessiveMovement) {
+                faceMovementViolationsRef.current += 1;
+                if (faceMovementViolationsRef.current >= 2) {
+                  handleMalpracticeDisqualification(
+                    "🚨 Suspicious Face Movement Detected: Excessive movement / looking away from the interview screen was detected. Interview permanently cancelled and retake is prohibited.",
+                    "face_movement_detected"
+                  );
+                  return;
+                }
+              } else {
+                faceMovementViolationsRef.current = 0;
+              }
+            }
+            lastFaceBoxRef.current = { cx, cy };
           }
+        } catch {
+          faceDetected = true;
+        }
+      } else {
+        // Fallback skin-tone centroid analysis for browsers without native FaceDetector
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 40;
+          canvas.height = 30;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, 40, 30);
+          const imgData = ctx.getImageData(0, 0, 40, 30).data;
+
+          let sumX = 0, sumY = 0, count = 0;
+          for (let y = 0; y < 30; y++) {
+            for (let x = 0; x < 40; x++) {
+              const idx = (y * 40 + x) * 4;
+              const r = imgData[idx], g = imgData[idx + 1], b = imgData[idx + 2];
+              if (r > 60 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 15) {
+                sumX += x;
+                sumY += y;
+                count++;
+              }
+            }
+          }
+
+          if (count < 20) {
+            faceDetected = false;
+          } else {
+            faceDetected = true;
+            faceMissingTimerRef.current = 0;
+            const cx = sumX / count / 40;
+            const cy = sumY / count / 30;
+
+            if (lastFaceBoxRef.current) {
+              const prev = lastFaceBoxRef.current;
+              const deltaX = Math.abs(cx - prev.cx);
+              const deltaY = Math.abs(cy - prev.cy);
+              const isLookingAway = cx < 0.18 || cx > 0.82 || cy > 0.82;
+              const isExcessiveMovement = deltaX > 0.28 || deltaY > 0.30;
+
+              if (isLookingAway || isExcessiveMovement) {
+                faceMovementViolationsRef.current += 1;
+                if (faceMovementViolationsRef.current >= 2) {
+                  handleMalpracticeDisqualification(
+                    "🚨 Suspicious Face Movement Detected: Excessive movement / looking away from the interview screen was detected. Interview permanently cancelled and retake is prohibited.",
+                    "face_movement_detected"
+                  );
+                  return;
+                }
+              } else {
+                faceMovementViolationsRef.current = 0;
+              }
+            }
+            lastFaceBoxRef.current = { cx, cy };
+          }
+        } catch {
+          faceDetected = true;
         }
       }
 
       if (!faceDetected) {
         faceMissingTimerRef.current += 1;
-        // Trigger violation warning if face is absent for ~4-5 seconds (2 checks)
         if (faceMissingTimerRef.current >= 2) {
           faceMissingTimerRef.current = 0;
-          handleFaceMissingViolation();
+          handleMalpracticeDisqualification(
+            "🚨 Candidate Absent Violation: Candidate face was not visible in camera preview. The interview has been permanently cancelled and retake is prohibited.",
+            "face_absent"
+          );
         }
       } else {
         faceMissingTimerRef.current = 0;
       }
-    }, 2500);
+    }, 1800);
 
     return () => clearInterval(interval);
-  }, [isCameraActive, completed, interviewCancelled, resumeMissingError, faceWarningCount]);
+  }, [isCameraActive, completed, interviewCancelled, resumeMissingError]);
 
-  const handleFaceMissingViolation = async () => {
-    const nextCount = faceWarningCount + 1;
-    setFaceWarningCount(nextCount);
+  const handleMalpracticeDisqualification = async (reason, violationType = 'malpractice') => {
+    setInterviewCancelled(true);
+    setCancelReason(reason);
+    stopWebcam();
+    if (recognitionRef.current) recognitionRef.current.stop();
+    stopAiVoice();
 
-    if (nextCount < 3) {
-      setFaceWarningMessage(
-        `🚨 Face Not Visible (Warning ${nextCount} of 3): Candidate face is not detected in camera frame! Please face the camera directly. 3 warnings will permanently auto-cancel this interview.`
-      );
-      try {
-        await interviewsApi.logProctoringEvent(
-          Number(interviewId),
-          'face_not_visible',
-          `Candidate face not visible in camera preview (Warning ${nextCount}/3)`
-        );
-      } catch (e) {
-        console.warn('Proctoring log error:', e);
-      }
+    try {
+      await interviewsApi.cancelInterview(Number(interviewId), reason, violationType);
+    } catch (e) {
+      console.error('Failed to cancel interview on backend:', e);
+    }
+  };
 
-      setTimeout(() => {
-        setFaceWarningMessage((cur) => (cur ? null : cur));
-      }, 5500);
-    } else {
-      // 3 Warnings Reached -> Auto-cancel interview!
-      setInterviewCancelled(true);
-      const reason = 'Interview Auto-Cancelled: Candidate face was not visible in camera preview for 3 consecutive warnings.';
-      setCancelReason(reason);
-      stopWebcam();
-      if (recognitionRef.current) recognitionRef.current.stop();
-      window.speechSynthesis?.cancel();
-
-      try {
-        await interviewsApi.cancelInterview(Number(interviewId), reason);
-      } catch (e) {
-        console.error('Failed to cancel interview on backend:', e);
-      }
+  const handleShuffleQuestions = async () => {
+    setIsShuffling(true);
+    try {
+      await interviewsApi.shuffleQuestions(Number(interviewId));
+      setShuffleNotice('Questions randomized and shuffled!');
+      await fetchInterviewSession();
+      setTimeout(() => setShuffleNotice(null), 3000);
+    } catch (e) {
+      console.warn('Shuffle error:', e);
+    } finally {
+      setIsShuffling(false);
     }
   };
 
@@ -570,33 +760,45 @@ export default function InterviewRoom() {
 
   if (interviewCancelled) {
     return (
-      <div className="max-w-2xl mx-auto my-12 p-8 sm:p-10 rounded-2xl bg-rose-950/40 border-2 border-rose-600/80 text-center space-y-6 shadow-2xl backdrop-blur-md animate-fadeIn">
-        <div className="w-20 h-20 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto shadow-lg shadow-rose-600/20">
-          <ShieldAlert className="w-12 h-12 text-rose-500 animate-pulse" />
+      <div className="max-w-2xl mx-auto my-12 p-6 sm:p-10 rounded-2xl bg-rose-950/50 border-2 border-rose-600 text-center space-y-6 shadow-2xl backdrop-blur-md animate-fadeIn">
+        <div className="w-20 h-20 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto shadow-lg shadow-rose-600/30">
+          <Ban className="w-12 h-12 text-rose-500 animate-pulse" />
         </div>
         <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-rose-400 px-3 py-1 rounded-full bg-rose-950 border border-rose-700">
-            Interview Auto-Cancelled (Status: Cancelled)
+          <span className="text-xs font-bold uppercase tracking-wider text-rose-300 px-3.5 py-1 rounded-full bg-rose-950 border border-rose-700 inline-flex items-center gap-1.5 shadow-inner">
+            <Lock className="w-3.5 h-3.5 text-rose-400" />
+            Interview Permanently Cancelled • Retake Prohibited
           </span>
           <h2 className="text-2xl sm:text-3xl font-black text-white mt-4">
-            Session Cancelled Due to Proctoring Non-Compliance
+            Candidate Disqualified (Malpractice Detected)
           </h2>
-          <p className="text-xs text-rose-200 mt-3 max-w-lg mx-auto leading-relaxed">
-            {cancelReason || 'Candidate face was not visible in camera preview for 3 consecutive warnings. As per the strict autonomous proctoring integrity protocol, this evaluation has been automatically cancelled.'}
+          <p className="text-xs sm:text-sm text-rose-200 mt-3 max-w-lg mx-auto leading-relaxed font-medium">
+            {cancelReason || 'In-camera prohibited object (mobile phone) or suspicious face movement was detected during autonomous proctoring. As per strict academic integrity protocols, this session has been permanently terminated.'}
           </p>
         </div>
 
-        <div className="bg-slate-900/90 border border-rose-900/80 rounded-xl p-4 text-left text-xs space-y-2">
-          <div className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Integrity Audit Record:</div>
+        <div className="bg-slate-900/90 border border-rose-900/80 rounded-xl p-4 sm:p-5 text-left text-xs space-y-3">
+          <div className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider flex items-center justify-between pb-2 border-b border-slate-800">
+            <span>Academic Integrity Protocol Audit:</span>
+            <span className="text-rose-400 font-bold flex items-center gap-1">
+              <Ban className="w-3.5 h-3.5" /> PERMANENTLY DISQUALIFIED
+            </span>
+          </div>
           <div className="text-rose-300 font-mono text-[11px] flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-            Face Visibility Violations: 3 of 3 warnings exceeded
+            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0"></span>
+            <span>Violation: Prohibited object (mobile phone) / suspicious movement in camera</span>
           </div>
-          <div className="text-slate-300 text-[11px]">
-            Final Recruiter Status: <span className="font-bold text-rose-400">Rejected (Proctoring Violation)</span>
+          <div className="text-slate-300 text-[11px] flex items-center justify-between">
+            <span>Final Recruiter Decision:</span>
+            <span className="font-bold text-rose-400">Rejected (Proctoring Malpractice)</span>
           </div>
-          <div className="text-slate-300 text-[11px]">
-            Integrity Score: <span className="font-bold text-rose-400">0.0%</span>
+          <div className="text-slate-300 text-[11px] flex items-center justify-between">
+            <span>Integrity Score:</span>
+            <span className="font-bold text-rose-400 font-mono">0.0%</span>
+          </div>
+          <div className="text-amber-300 text-[11px] font-bold flex items-center gap-2 pt-2 border-t border-slate-800 bg-amber-950/30 p-2.5 rounded-lg border border-amber-800/40">
+            <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Retake Status: Strictly Prohibited. Candidate is not allowed to give or retake this interview again.</span>
           </div>
         </div>
 

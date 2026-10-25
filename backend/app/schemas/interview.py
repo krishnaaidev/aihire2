@@ -68,6 +68,8 @@ class InterviewStatusUpdate(BaseModel):
 
 class InterviewCancelPayload(BaseModel):
     reason: Optional[str] = "Terminated: Face not visible for 3 warnings."
+    violation_type: Optional[str] = "malpractice"
+    permanent_disqualification: Optional[bool] = True
 
 class AnswerSubmit(BaseModel):
     interview_id: int

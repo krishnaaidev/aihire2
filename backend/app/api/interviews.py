@@ -55,6 +55,18 @@ async def create_interview(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    # Check if candidate has a cancelled interview for this job (permanent block - candidate cannot retake)
+    cancelled_interview = db.query(Interview).filter(
+        Interview.candidate_id == candidate.id,
+        Interview.job_id == job.id,
+        Interview.status == "cancelled"
+    ).first()
+    if cancelled_interview:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Interview permanently cancelled due to academic integrity violation (prohibited object or face movement detected). Candidate is not allowed to give or retake this interview."
+        )
+
     # Check if there is already an in-progress interview for this job
     existing = db.query(Interview).filter(
         Interview.candidate_id == candidate.id,
@@ -135,6 +147,12 @@ async def submit_answer(
     interview = db.query(Interview).filter(Interview.id == interview_id).first()
     if not interview:
         raise HTTPException(status_code=404, detail="Interview not found")
+
+    if interview.status == "cancelled":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This interview was cancelled due to academic integrity violation. You are not allowed to answer or retake."
+        )
 
     question = db.query(Question).filter(Question.id == ans_in.question_id).first()
     if not question:
@@ -374,31 +392,64 @@ def cancel_interview(
     if not interview:
         raise HTTPException(status_code=404, detail="Interview not found")
 
-    reason = payload.reason if payload and payload.reason else "Terminated: Face not visible for 3 warnings."
+    reason = payload.reason if payload and payload.reason else "Session Cancelled: Prohibited object (mobile phone) or face movement detected."
+    violation_type = payload.violation_type if payload and payload.violation_type else "malpractice"
     interview.status = "cancelled"
-    interview.recruiter_status = "Rejected"
+    interview.recruiter_status = "Rejected (Proctoring Violation)"
     interview.integrity_score = 0.0
 
     flags = json.loads(interview.proctoring_flags or "[]")
     flags.append({
         "event": "interview_cancelled",
+        "violation_type": violation_type,
         "reason": reason,
+        "permanent_disqualification": True,
         "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     })
     interview.proctoring_flags = json.dumps(flags)
 
     if interview.report:
         interview.report.decision_status = "Rejected"
+        interview.report.recommendation = "Disqualified (Proctoring Violation)"
         interview.report.integrity_score = 0.0
-        interview.report.proctoring_summary = f"Session Terminated & Cancelled: {reason}"
+        interview.report.proctoring_summary = f"Session Terminated & Permanently Disqualified: {reason}"
 
     db.commit()
     return {
         "status": "cancelled",
         "message": reason,
         "recruiter_status": interview.recruiter_status,
-        "integrity_score": interview.integrity_score
+        "integrity_score": interview.integrity_score,
+        "retake_allowed": False
     }
+
+@router.post("/{interview_id}/shuffle-questions")
+def shuffle_interview_questions(
+    interview_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    import random
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    if interview.status == "cancelled":
+        raise HTTPException(status_code=403, detail="Interview is cancelled.")
+
+    current_idx = interview.current_question_index
+    questions = db.query(Question).filter(
+        Question.interview_id == interview_id,
+        Question.order_index > current_idx
+    ).all()
+
+    if questions and len(questions) > 1:
+        indices = [q.order_index for q in questions]
+        random.shuffle(indices)
+        for q, new_idx in zip(questions, indices):
+            q.order_index = new_idx
+        db.commit()
+
+    return {"message": "Remaining questions shuffled successfully"}
 
 @router.get("/job/{job_id}/export-csv")
 def export_job_candidates_csv(job_id: int, db: Session = Depends(get_db)):

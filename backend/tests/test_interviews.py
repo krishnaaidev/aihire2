@@ -111,17 +111,30 @@ def test_interview_requires_resume():
         assert "Test Candidate" in csv_res.text
         assert "Shortlisted" in csv_res.text
 
-        # 7. Test Face Visibility 3-Warning Auto-Cancellation
+        # 7. Test Face Visibility & Object/Movement Malpractice Auto-Cancellation
         cancel_res = client.post(
             f"/api/interviews/{interview_id}/cancel",
-            json={"reason": "Candidate face was not visible in camera preview for 3 consecutive warnings."},
+            json={
+                "reason": "Candidate face was not visible in camera preview for 3 consecutive warnings.",
+                "violation_type": "proctoring_malpractice",
+                "permanent_disqualification": True
+            },
             headers={"Authorization": f"Bearer {token}"}
         )
         assert cancel_res.status_code == 200
         cancel_data = cancel_res.json()
         assert cancel_data["status"] == "cancelled"
-        assert cancel_data["recruiter_status"] == "Rejected"
+        assert "Rejected" in cancel_data["recruiter_status"]
         assert cancel_data["integrity_score"] == 0.0
+
+        # 8. Test Retake Prohibition: Candidate cannot create interview again for this job
+        retake_res = client.post(
+            "/api/interviews",
+            json={"job_id": job.id, "mode": "text"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert retake_res.status_code == 403
+        assert "permanently cancelled" in retake_res.json()["detail"].lower()
 
     finally:
         db.close()

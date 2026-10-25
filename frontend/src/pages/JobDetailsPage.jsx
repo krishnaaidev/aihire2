@@ -19,7 +19,8 @@ import {
   Upload,
   CheckCircle2,
   FileText,
-  Workflow
+  Workflow,
+  Ban
 } from 'lucide-react';
 
 export default function JobDetailsPage() {
@@ -29,6 +30,7 @@ export default function JobDetailsPage() {
 
   const [job, setJob] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [myInterviews, setMyInterviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [matchResult, setMatchResult] = useState(null);
   const [matchingLoading, setMatchingLoading] = useState(false);
@@ -37,11 +39,13 @@ export default function JobDetailsPage() {
   useEffect(() => {
     Promise.all([
       jobsApi.getJob(jobId),
-      candidatesApi.getMyProfile().catch(() => null)
+      candidatesApi.getMyProfile().catch(() => null),
+      interviewsApi.getMyInterviews().catch(() => [])
     ])
-      .then(([jobData, profileData]) => {
+      .then(([jobData, profileData, ivsData]) => {
         setJob(jobData);
         setProfile(profileData);
+        setMyInterviews(ivsData || []);
       })
       .catch(err => console.error(err))
       .finally(() => setLoading(false));
@@ -63,7 +67,17 @@ export default function JobDetailsPage() {
     }
   };
 
+  const cancelledInterview = myInterviews.find(
+    (iv) => iv.job_id === Number(jobId) && iv.status === 'cancelled'
+  );
+  const isDisqualified = Boolean(cancelledInterview);
+
   const handleStartInterview = async (mode = 'text') => {
+    if (isDisqualified) {
+      alert('You are permanently disqualified from retaking this interview due to an academic integrity proctoring violation (prohibited object or face movement detected).');
+      return;
+    }
+
     // Zero-start interview rule: candidate MUST upload resume first
     if (!profile?.resume_filename) {
       setShowResumeModal(true);
@@ -77,6 +91,8 @@ export default function JobDetailsPage() {
       const msg = err.message || '';
       if (msg.toLowerCase().includes('resume')) {
         setShowResumeModal(true);
+      } else if (msg.toLowerCase().includes('permanently cancelled') || msg.toLowerCase().includes('disqualified') || msg.toLowerCase().includes('retake')) {
+        alert(msg);
       } else {
         alert('Could not start interview: ' + msg);
       }
@@ -164,15 +180,52 @@ export default function JobDetailsPage() {
             {matchingLoading ? 'Analyzing...' : 'Check Skill Match'}
           </button>
 
-          <button
-            onClick={() => handleStartInterview('text')}
-            className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all"
-          >
-            <Play className="w-4 h-4 fill-slate-950" />
-            Start AI Interview Now
-          </button>
+          {isDisqualified ? (
+            <button
+              disabled
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-rose-950/80 text-rose-300 border border-rose-800 flex items-center justify-center gap-2 cursor-not-allowed opacity-90 shadow-lg shadow-rose-950/30"
+              title="Interview permanently cancelled due to academic integrity violation. Retake strictly prohibited."
+            >
+              <Ban className="w-4 h-4 text-rose-400" />
+              Disqualified (Locked)
+            </button>
+          ) : (
+            <button
+              onClick={() => handleStartInterview('text')}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all"
+            >
+              <Play className="w-4 h-4 fill-slate-950" />
+              Start AI Interview Now
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Permanent Disqualification Banner */}
+      {isDisqualified && (
+        <div className="bg-rose-950/60 border border-rose-800/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-200 text-xs shadow-lg shadow-rose-950/40">
+          <div className="flex items-center gap-2.5">
+            <Ban className="w-5 h-5 text-rose-400 shrink-0" />
+            <div>
+              <span className="font-bold block text-rose-300">Permanently Disqualified • Retake Strictly Prohibited</span>
+              <span>
+                An interview session for this position was terminated due to an academic integrity proctoring violation (
+                {Array.isArray(cancelledInterview.proctoring_flags) && cancelledInterview.proctoring_flags.length > 0
+                  ? cancelledInterview.proctoring_flags[cancelledInterview.proctoring_flags.length - 1].reason
+                  : 'prohibited object or face movement detected'}
+                ). Retaking this interview is permanently barred.
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/portal?tab=profile')}
+            className="px-4 py-2 rounded-xl bg-rose-900/80 hover:bg-rose-800 text-rose-200 border border-rose-700 font-bold shrink-0 text-center transition-colors flex items-center justify-center gap-1.5"
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            View Audit Record
+          </button>
+        </div>
+      )}
 
       {/* Resume status alert banner if candidate has no resume */}
       {!profile?.resume_filename && (
