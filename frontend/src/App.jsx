@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Pages
 import LandingPage from './pages/LandingPage';
@@ -22,12 +23,13 @@ import AdminDashboard from './pages/AdminDashboard';
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-          <Navbar />
-          <main className="flex-1">
-            <Routes>
+    <ErrorBoundary>
+      <AuthProvider>
+        <BrowserRouter>
+          <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+            <Navbar />
+            <main className="flex-1">
+              <Routes>
               {/* Public Routes */}
               <Route path="/" element={<LandingPage />} />
               <Route path="/jobs" element={<JobListingPage />} />
@@ -112,5 +114,6 @@ export default function App() {
         </div>
       </BrowserRouter>
     </AuthProvider>
-  );
+  </ErrorBoundary>
+);
 }

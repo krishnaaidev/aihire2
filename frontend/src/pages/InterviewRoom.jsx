@@ -64,11 +64,15 @@ export default function InterviewRoom() {
   const [interviewCancelled, setInterviewCancelled] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [faceWarningMessage, setFaceWarningMessage] = useState(null);
+  const [faceWarningCount, setFaceWarningCount] = useState(0);
   const [isAiVisionReady, setIsAiVisionReady] = useState(false);
   const [shuffleNotice, setShuffleNotice] = useState(null);
   const [isShuffling, setIsShuffling] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const faceMissingTimerRef = useRef(0);
+  const faceWarningCountRef = useRef(0);
   const faceDetectorRef = useRef(null);
   const objectDetectorRef = useRef(null);
   const lastFaceBoxRef = useRef(null);
@@ -432,10 +436,27 @@ export default function InterviewRoom() {
         faceMissingTimerRef.current += 1;
         if (faceMissingTimerRef.current >= 2) {
           faceMissingTimerRef.current = 0;
-          handleMalpracticeDisqualification(
-            "🚨 Candidate Absent Violation: Candidate face was not visible in camera preview. The interview has been permanently cancelled and retake is prohibited.",
-            "face_absent"
-          );
+          faceWarningCountRef.current = (faceWarningCountRef.current || 0) + 1;
+          const currentCount = faceWarningCountRef.current;
+          setFaceWarningCount(currentCount);
+
+          if (currentCount === 1) {
+            setFaceWarningMessage("⚠️ Warning 1/3: Candidate face not visible in camera preview! Please look directly at the screen.");
+            try {
+              interviewsApi.logProctoringEvent(Number(interviewId), 'face_absence_warning', 'Warning 1/3: Candidate face not visible in camera preview.');
+            } catch (e) {}
+          } else if (currentCount === 2) {
+            setFaceWarningMessage("🚨 FINAL WARNING 2/3: Candidate face absent! A 3rd warning will permanently cancel this interview!");
+            try {
+              interviewsApi.logProctoringEvent(Number(interviewId), 'face_absence_warning', 'Warning 2/3: Candidate face absent (final warning).');
+            } catch (e) {}
+          } else if (currentCount >= 3) {
+            setFaceWarningMessage("🚨 3 Face Absence Warnings Reached: Interview Disqualified.");
+            handleMalpracticeDisqualification(
+              "🚨 Candidate Absent Violation: Candidate face was not visible in camera preview for 3 consecutive warnings. The interview has been permanently cancelled and retake is prohibited.",
+              "face_absent_3_strikes"
+            );
+          }
         }
       } else {
         faceMissingTimerRef.current = 0;
@@ -474,6 +495,8 @@ export default function InterviewRoom() {
   };
 
   const fetchInterviewSession = async () => {
+    setLoading(true);
+    setLoadError('');
     try {
       const data = await interviewsApi.getInterview(interviewId);
       setInterview(data);
@@ -499,8 +522,11 @@ export default function InterviewRoom() {
       if (msg.toLowerCase().includes('resume')) {
         setResumeMissingError(true);
       } else {
-        alert('Error loading interview session: ' + msg);
+        setLoadError(msg);
+        console.error('Error loading interview session:', msg);
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -724,6 +750,16 @@ export default function InterviewRoom() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center p-8 space-y-4 text-center">
+        <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-sm font-bold text-white">Connecting to Autonomous AI Interview Room #{interviewId}...</p>
+        <span className="text-xs text-slate-400">Loading candidate competencies, adaptive speech engine, and proctoring telemetry...</span>
+      </div>
+    );
+  }
+
   if (resumeMissingError) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-6">
@@ -811,6 +847,26 @@ export default function InterviewRoom() {
             Return to Candidate Portal
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (!interview) {
+    return (
+      <div className="max-w-md mx-auto my-16 p-8 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-4 shadow-2xl">
+        <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center mx-auto">
+          <AlertCircle className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-white">Interview Session Unavailable</h2>
+        <p className="text-xs text-slate-400">
+          {loadError || `Interview session #${interviewId} could not be loaded or may not exist.`}
+        </p>
+        <button
+          onClick={() => navigate('/candidate')}
+          className="px-5 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 transition-all shadow-md shadow-cyan-500/20"
+        >
+          Return to Candidate Portal
+        </button>
       </div>
     );
   }

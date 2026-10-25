@@ -4,7 +4,7 @@ import { Bot, Shield, Cpu, Code2, Heart } from 'lucide-react';
 export default function Footer() {
   return (
     <footer className="bg-slate-950 border-t border-slate-800/80 text-slate-400 py-10 mt-auto">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-10">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           
           <div className="md:col-span-2 space-y-3">
