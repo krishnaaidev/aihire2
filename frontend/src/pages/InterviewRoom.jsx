@@ -77,6 +77,8 @@ export default function InterviewRoom() {
   const streamRef = useRef(null);
   const cameraWarmupTicksRef = useRef(0);
   const consecutivePhoneDetectionsRef = useRef(0);
+  const multiPersonViolationsRef = useRef(0);
+  const multiFaceViolationsRef = useRef(0);
   const faceMissingTimerRef = useRef(0);
   const faceWarningCountRef = useRef(0);
   const faceDetectorRef = useRef(null);
@@ -84,9 +86,6 @@ export default function InterviewRoom() {
   const objectDetectorRef = useRef(null);
   const lastFaceBoxRef = useRef(null);
   const faceMovementViolationsRef = useRef(0);
-  const objectDetectionViolationsRef = useRef(0);
-  const multiPersonCvCountRef = useRef(0);
-  const deviceCvCountRef = useRef(0);
 
   // References
   const videoRef = useRef(null);
@@ -267,7 +266,38 @@ export default function InterviewRoom() {
     }, 4500);
   };
 
-  // AI Proctoring: Real-time Millisecond Detection (BlazeFace + COCO-SSD + Spatial Canvas Engine)
+  // Helper: Calculate Intersection-over-Union (IoU) to filter overlapping duplicate detections of the same candidate
+  const calculateBboxIoU = (b1, b2) => {
+    // b1, b2: [x, y, width, height]
+    const x1 = Math.max(b1[0], b2[0]);
+    const y1 = Math.max(b1[1], b2[1]);
+    const x2 = Math.min(b1[0] + b1[2], b2[0] + b2[2]);
+    const y2 = Math.min(b1[1] + b1[3], b2[1] + b2[3]);
+    const intersectionArea = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+    const area1 = Math.max(0, b1[2]) * Math.max(0, b1[3]);
+    const area2 = Math.max(0, b2[2]) * Math.max(0, b2[3]);
+    const unionArea = area1 + area2 - intersectionArea;
+    return unionArea > 0 ? intersectionArea / unionArea : 0;
+  };
+
+  const deduplicateBoxes = (boxes, iouThreshold = 0.20) => {
+    const distinct = [];
+    for (const box of boxes) {
+      let isOverlap = false;
+      for (const d of distinct) {
+        if (calculateBboxIoU(box, d) > iouThreshold) {
+          isOverlap = true;
+          break;
+        }
+      }
+      if (!isOverlap) {
+        distinct.push(box);
+      }
+    }
+    return distinct;
+  };
+
+  // AI Proctoring: High-precision Real-time Detection (BlazeFace + COCO-SSD + IoU De-duplication)
   useEffect(() => {
     if (completed || interviewCancelled || resumeMissingError || loading) return;
 
@@ -285,92 +315,132 @@ export default function InterviewRoom() {
         return;
       }
 
-      // Warmup: wait 1 cycle (350ms) to ensure video frame is drawn
-      if (cameraWarmupTicksRef.current < 1) {
+      // Warmup: wait 2 cycles (1000ms) to ensure video frame is fully rendered and stabilized
+      if (cameraWarmupTicksRef.current < 2) {
         cameraWarmupTicksRef.current += 1;
         return;
       }
 
       const video = videoRef.current;
+      let faceDetected = false;
 
-      // 2. High-speed COCO-SSD Neural Detection (Multiple Persons & Mobile Phone within milliseconds)
+      // 2. High-speed COCO-SSD Neural Detection (Multiple Distinct Persons & Mobile Phone)
       if (objectDetectorRef.current) {
         try {
           const predictions = await objectDetectorRef.current.detect(video);
 
-          // A. MULTIPLE PERSON DETECTION
-          const persons = predictions.filter(
-            (p) => (p.class || '').toLowerCase() === 'person' && p.score >= 0.35
-          );
-          if (persons.length >= 2) {
-            handleMalpracticeDisqualification(
-              "🚨 Malpractice Detected: Multiple individuals (2 or more people) detected in camera view! Academic integrity rules require the candidate to be completely alone during the interview. You are permanently disqualified from retaking this interview.",
-              "multiple_faces_detected"
-            );
-            return;
+          // A. MULTIPLE DISTINCT PERSON DETECTION (with IoU overlap de-duplication)
+          const personBoxes = predictions
+            .filter((p) => (p.class || '').toLowerCase() === 'person' && p.score >= 0.50 && Array.isArray(p.bbox))
+            .map((p) => p.bbox);
+
+          const distinctPersons = deduplicateBoxes(personBoxes, 0.20);
+          if (distinctPersons.length >= 2) {
+            multiPersonViolationsRef.current += 1;
+            if (multiPersonViolationsRef.current >= 3) { // 3 consecutive cycles (~1.5s) to confirm
+              handleMalpracticeDisqualification(
+                "🚨 Malpractice Detected: Multiple individuals (2 or more people) detected in camera view! Academic integrity rules require the candidate to be completely alone during the interview. You are permanently disqualified from retaking this interview.",
+                "multiple_faces_detected"
+              );
+              return;
+            }
+          } else {
+            multiPersonViolationsRef.current = 0;
+            if (distinctPersons.length === 1) {
+              faceDetected = true;
+              faceMissingTimerRef.current = 0;
+            }
           }
 
-          // B. MOBILE PHONE / ELECTRONIC DEVICE DETECTION
-          for (const pred of predictions) {
+          // B. MOBILE PHONE / PROHIBITED DEVICE DETECTION (confirmed across consecutive cycles)
+          const hasPhone = predictions.some((pred) => {
             const cls = (pred.class || '').toLowerCase();
-            if (pred.score >= 0.30 && (cls === 'cell phone' || cls === 'remote' || cls === 'laptop' || cls === 'tablet' || cls === 'book')) {
+            return (cls === 'cell phone' && pred.score >= 0.45) || (cls === 'remote' && pred.score >= 0.65);
+          });
+
+          if (hasPhone) {
+            consecutivePhoneDetectionsRef.current += 1;
+            if (consecutivePhoneDetectionsRef.current >= 3) { // 3 consecutive cycles (~1.5s)
               handleMalpracticeDisqualification(
-                `🚨 Prohibited Object Detected: ${cls === 'cell phone' ? 'Mobile Phone' : cls} was detected in camera view! Academic integrity rules strictly prohibit electronic devices during the interview. You are permanently disqualified from retaking this interview.`,
+                "🚨 Prohibited Object Detected: Mobile phone / electronic device was detected in camera view! Academic integrity rules strictly prohibit electronic devices during the interview. You are permanently disqualified from retaking this interview.",
                 "mobile_phone_detected"
               );
               return;
             }
+          } else {
+            consecutivePhoneDetectionsRef.current = 0;
           }
         } catch (objErr) {
           console.warn('COCO-SSD detection error:', objErr);
         }
       }
 
-      let faceDetected = false;
-
       // 3. High-speed BlazeFace Face Detection (~15ms inference)
       if (blazeFaceRef.current) {
         try {
           const faces = await blazeFaceRef.current.estimateFaces(video, false);
-          if (faces && faces.length >= 2) {
-            handleMalpracticeDisqualification(
-              "🚨 Malpractice Detected: Multiple individuals detected in camera view! The interview must be conducted strictly alone. Retake is prohibited.",
-              "multiple_faces_detected"
-            );
-            return;
-          }
-          if (faces && faces.length === 1) {
-            faceDetected = true;
-            faceMissingTimerRef.current = 0;
+          if (faces && faces.length > 0) {
+            // Filter high-confidence faces (>= 0.70)
+            const validFaces = faces.filter((f) => {
+              const prob = Array.isArray(f.probability) ? f.probability[0] : (typeof f.probability === 'number' ? f.probability : 1.0);
+              return prob >= 0.70;
+            });
 
-            const start = faces[0].topLeft;
-            const end = faces[0].bottomRight;
-            const vW = video.videoWidth || 640;
-            const vH = video.videoHeight || 480;
-            const cx = (start[0] + end[0]) / (2 * vW);
-            const cy = (start[1] + end[1]) / (2 * vH);
+            const faceBoxes = validFaces.map((f) => [
+              f.topLeft[0],
+              f.topLeft[1],
+              Math.max(0, f.bottomRight[0] - f.topLeft[0]),
+              Math.max(0, f.bottomRight[1] - f.topLeft[1]),
+            ]);
 
-            if (lastFaceBoxRef.current) {
-              const prev = lastFaceBoxRef.current;
-              const deltaX = Math.abs(cx - prev.cx);
-              const deltaY = Math.abs(cy - prev.cy);
-              const isLookingAway = cx < 0.12 || cx > 0.88 || cy > 0.90;
-              const isExcessiveMovement = deltaX > 0.35 || deltaY > 0.35;
+            const distinctFaces = deduplicateBoxes(faceBoxes, 0.25);
 
-              if (isLookingAway || isExcessiveMovement) {
-                faceMovementViolationsRef.current += 1;
-                if (faceMovementViolationsRef.current >= 4) { // ~1.4s of looking away
-                  handleMalpracticeDisqualification(
-                    "🚨 Suspicious Face Movement Detected: Excessive movement / looking away from the interview screen was detected. Interview permanently cancelled and retake is prohibited.",
-                    "face_movement_detected"
-                  );
-                  return;
-                }
-              } else {
-                faceMovementViolationsRef.current = 0;
+            if (distinctFaces.length >= 2) {
+              multiFaceViolationsRef.current += 1;
+              if (multiFaceViolationsRef.current >= 3) { // 3 consecutive cycles (~1.5s)
+                handleMalpracticeDisqualification(
+                  "🚨 Malpractice Detected: Multiple individuals detected in camera view! The interview must be conducted strictly alone. Retake is prohibited.",
+                  "multiple_faces_detected"
+                );
+                return;
               }
+            } else {
+              multiFaceViolationsRef.current = 0;
             }
-            lastFaceBoxRef.current = { cx, cy };
+
+            if (distinctFaces.length === 1) {
+              faceDetected = true;
+              faceMissingTimerRef.current = 0;
+
+              const start = validFaces[0].topLeft;
+              const end = validFaces[0].bottomRight;
+              const vW = video.videoWidth || 640;
+              const vH = video.videoHeight || 480;
+              const cx = (start[0] + end[0]) / (2 * vW);
+              const cy = (start[1] + end[1]) / (2 * vH);
+
+              if (lastFaceBoxRef.current) {
+                const prev = lastFaceBoxRef.current;
+                const deltaX = Math.abs(cx - prev.cx);
+                const deltaY = Math.abs(cy - prev.cy);
+                const isLookingAway = cx < 0.08 || cx > 0.92 || cy > 0.94;
+                const isExcessiveMovement = deltaX > 0.40 || deltaY > 0.40;
+
+                if (isLookingAway || isExcessiveMovement) {
+                  faceMovementViolationsRef.current += 1;
+                  if (faceMovementViolationsRef.current >= 6) { // ~3.0s of continuous off-screen look
+                    handleMalpracticeDisqualification(
+                      "🚨 Suspicious Face Movement Detected: Excessive movement / looking away from the interview screen was detected. Interview permanently cancelled and retake is prohibited.",
+                      "face_movement_detected"
+                    );
+                    return;
+                  }
+                } else {
+                  faceMovementViolationsRef.current = 0;
+                }
+              }
+              lastFaceBoxRef.current = { cx, cy };
+            }
           }
         } catch (bfErr) {
           console.warn('BlazeFace detection error:', bfErr);
@@ -382,107 +452,54 @@ export default function InterviewRoom() {
         try {
           const faces = await faceDetectorRef.current.detect(video);
           if (faces && faces.length >= 2) {
-            handleMalpracticeDisqualification(
-              "🚨 Malpractice Detected: Multiple individuals detected in camera view. The interview must be conducted strictly alone. Retake is prohibited.",
-              "multiple_faces_detected"
-            );
-            return;
-          } else if (faces && faces.length === 1) {
-            faceDetected = true;
-            faceMissingTimerRef.current = 0;
-          }
-        } catch (fdErr) {}
-      }
-
-      // 5. In-Memory Canvas Spatial Multi-Person & Mobile Phone Detector (Zero-delay Computer Vision)
-      try {
-        const cvCanvas = document.createElement('canvas');
-        cvCanvas.width = 80;
-        cvCanvas.height = 60;
-        const cvCtx = cvCanvas.getContext('2d');
-        cvCtx.drawImage(video, 0, 0, 80, 60);
-        const frameData = cvCtx.getImageData(0, 0, 80, 60).data;
-
-        // A. Spatial multi-person skin clustering:
-        let leftSkin = 0;
-        let rightSkin = 0;
-        let leftXSum = 0;
-        let rightXSum = 0;
-        let totalSkin = 0;
-
-        for (let y = 6; y < 52; y++) {
-          for (let x = 4; x < 76; x++) {
-            const idx = (y * 80 + x) * 4;
-            const r = frameData[idx], g = frameData[idx + 1], b = frameData[idx + 2];
-            const isSkin = (r > 60 && g > 38 && b > 20 && r > g && r > b && (r - g) >= 8 && Math.abs(r - b) >= 10);
-            if (isSkin) {
-              totalSkin++;
-              if (x < 36) {
-                leftSkin++;
-                leftXSum += x;
-              } else if (x > 44) {
-                rightSkin++;
-                rightXSum += x;
-              }
-            }
-          }
-        }
-
-        if (totalSkin >= 25) {
-          faceDetected = true;
-          faceMissingTimerRef.current = 0;
-        }
-
-        // Multi-Person Detection: Two distinct people in frame (e.g. 2 candidates side by side)
-        if (leftSkin >= 30 && rightSkin >= 30) {
-          const leftCenter = leftXSum / leftSkin;
-          const rightCenter = rightXSum / rightSkin;
-          if ((rightCenter - leftCenter) >= 20) {
-            multiPersonCvCountRef.current = (multiPersonCvCountRef.current || 0) + 1;
-            if (multiPersonCvCountRef.current >= 2) { // 2 cycles x 350ms = 700ms
+            multiFaceViolationsRef.current += 1;
+            if (multiFaceViolationsRef.current >= 3) {
               handleMalpracticeDisqualification(
-                "🚨 Malpractice Detected: Multiple individuals detected in camera view! Academic integrity rules require the candidate to be completely alone during the interview. You are permanently disqualified from retaking this interview.",
+                "🚨 Malpractice Detected: Multiple individuals detected in camera view. The interview must be conducted strictly alone. Retake is prohibited.",
                 "multiple_faces_detected"
               );
               return;
             }
+          } else if (faces && faces.length === 1) {
+            faceDetected = true;
+            faceMissingTimerRef.current = 0;
+            multiFaceViolationsRef.current = 0;
           }
-        } else {
-          multiPersonCvCountRef.current = 0;
-        }
+        } catch (fdErr) {}
+      }
 
-        // B. Mobile Phone Edge & Lens Cluster Contrast Analysis
-        let phoneGradients = 0;
-        for (let y = 15; y < 55; y++) {
-          for (let x = 10; x < 70; x++) {
-            const idx = (y * 80 + x) * 4;
-            const rightIdx = (y * 80 + x + 1) * 4;
-            const lum1 = frameData[idx] * 0.299 + frameData[idx + 1] * 0.587 + frameData[idx + 2] * 0.114;
-            const lum2 = frameData[rightIdx] * 0.299 + frameData[rightIdx + 1] * 0.587 + frameData[rightIdx + 2] * 0.114;
-            if (Math.abs(lum1 - lum2) > 80) {
-              phoneGradients++;
+      // 5. In-Memory Canvas Gentle Fallback for Face Presence Verification ONLY (Zero Disqualification)
+      try {
+        const cvCanvas = document.createElement('canvas');
+        cvCanvas.width = 64;
+        cvCanvas.height = 48;
+        const cvCtx = cvCanvas.getContext('2d');
+        cvCtx.drawImage(video, 0, 0, 64, 48);
+        const frameData = cvCtx.getImageData(0, 0, 64, 48).data;
+
+        let totalSkin = 0;
+        for (let y = 6; y < 42; y++) {
+          for (let x = 6; x < 58; x++) {
+            const idx = (y * 64 + x) * 4;
+            const r = frameData[idx], g = frameData[idx + 1], b = frameData[idx + 2];
+            const isSkin = (r > 60 && g > 38 && b > 20 && r > g && r > b && (r - g) >= 8 && Math.abs(r - b) >= 10);
+            if (isSkin) {
+              totalSkin++;
             }
           }
         }
 
-        if (phoneGradients > 480) {
-          deviceCvCountRef.current = (deviceCvCountRef.current || 0) + 1;
-          if (deviceCvCountRef.current >= 2) {
-            handleMalpracticeDisqualification(
-              "🚨 Prohibited Object Detected: Mobile phone / electronic device detected in camera frame! Interview permanently cancelled and retake is prohibited.",
-              "mobile_phone_detected"
-            );
-            return;
-          }
-        } else {
-          deviceCvCountRef.current = 0;
+        // Only used to confirm presence so candidate isn't falsely marked as absent
+        if (totalSkin >= 15) {
+          faceDetected = true;
+          faceMissingTimerRef.current = 0;
         }
       } catch (cvErr) {}
 
-      // 6. Face Absence Detection (4.2 seconds = 12 ticks of 350ms)
+      // 6. Face Absence Detection (8.0 seconds = 16 ticks of 500ms)
       if (!faceDetected) {
         faceMissingTimerRef.current += 1;
-        if (faceMissingTimerRef.current >= 12) {
+        if (faceMissingTimerRef.current >= 16) {
           faceMissingTimerRef.current = 0;
           faceWarningCountRef.current = (faceWarningCountRef.current || 0) + 1;
           const currentCount = faceWarningCountRef.current;
@@ -509,7 +526,7 @@ export default function InterviewRoom() {
       } else {
         faceMissingTimerRef.current = 0;
       }
-    }, 350);
+    }, 500);
 
     return () => clearInterval(interval);
   }, [cameraReady, isCameraActive, completed, interviewCancelled, resumeMissingError, loading]);
