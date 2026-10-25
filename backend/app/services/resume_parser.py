@@ -19,6 +19,10 @@ SKILL_TAXONOMY = [
     "docker", "kubernetes", "aws", "azure", "gcp", "google cloud", "ci/cd", "github actions", "gitlab", "terraform", "ansible", "nginx", "linux", "git", "jira",
     # AI / ML & Data Science
     "machine learning", "deep learning", "nlp", "natural language processing", "computer vision", "tensorflow", "pytorch", "keras", "scikit-learn", "hugging face", "transformers", "llm", "large language models", "rag", "langchain", "llamaindex", "pandas", "numpy", "opencv", "whisper", "data science", "data analysis", "tableau", "power bi",
+    # Data Engineering, Analytics & BI
+    "data pipelines", "data cleaning", "data wrangling", "feature engineering", "predictive modeling", "time-series analysis", "kpi reporting", "a/b testing", "excel", "jupyter", "google colab",
+    # GenAI, NLP & Deep Learning
+    "llms", "genai", "generative ai", "embeddings", "tf-idf", "semantic matching", "nlp pipelines", "cnns", "cnn",
     # Architecture & Concepts
     "microservices", "system design", "object oriented programming", "oop", "agile", "scrum", "distributed systems", "websockets", "grpc", "tdd"
 ]
@@ -49,7 +53,7 @@ class ResumeParser:
             if re.search(pattern, text_lower):
                 # Capitalize nicely
                 words = skill.split()
-                nice_skill = " ".join(w.capitalize() if w not in ["js", "css", "api", "sql", "llm", "rag", "aws", "gcp", "ci/cd", "oop", "tdd"] else w.upper() for w in words)
+                nice_skill = " ".join(w.capitalize() if w not in ["js", "css", "api", "sql", "llm", "rag", "aws", "gcp", "ci/cd", "oop", "tdd", "nlp", "cnn", "cnns", "kpi", "bi"] else w.upper() for w in words)
                 found_skills.add(nice_skill)
                 
         return sorted(list(found_skills))

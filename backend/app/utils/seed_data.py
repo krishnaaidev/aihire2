@@ -488,71 +488,208 @@ RECRUITER_DATA = [
         "eligibility": "Graduation batch 2024, 2025, or 2026. Minimum 60% or 6.5 CGPA with no current backlogs. Solid algorithmic problem solving and passion for building user-friendly web interfaces.",
         "selection_process": "Round 1: AI Resume Matching & Project Review → Round 2: AI Core CS & Coding Interview (DSA, OOPs, Web Concepts) → Round 3: Live Pair Programming & Problem Solving → Round 4: HR Onboarding",
         "responsibilities": "Develop modular React components and implement clean backend REST endpoints. Write unit test cases, participate in GitHub pull request reviews, and optimize page load speeds."
+    },
+
+    # 21. Data Analytics & Business Intelligence - TAILORED FOR RESUME 1
+    {
+        "name": "Ananya Sharma",
+        "email": "ananya.analytics@aihire.com",
+        "branch": "Computer Science & Engineering",
+        "field": "Business Intelligence & Data Analytics",
+        "job_title": "Data Analyst & BI Dashboard Specialist (Associate / Fresher)",
+        "department": "Data & Business Intelligence Operations",
+        "description": "Extract, transform, and analyze enterprise student and SaaS business datasets. Develop interactive Power BI and Tableau dashboards, track customer segmentation KPIs, run A/B testing and time-series analyses, and surface actionable business insights.",
+        "required_skills": ["Python", "SQL", "Power BI", "Tableau", "Excel", "Data Cleaning", "KPI Reporting"],
+        "preferred_skills": ["A/B Testing", "Time-Series Analysis", "Pandas", "FastAPI", "Data Pipelines", "NumPy"],
+        "experience": "Fresher (0-1 years)",
+        "experience_level": "Fresher",
+        "salary_range": "₹6.0 - ₹9.0 LPA + Performance Bonus",
+        "location": "Remote / Bengaluru / Gurugram",
+        "work_mode": "Hybrid / Remote",
+        "openings": 8,
+        "employment_type": "Full-Time, Permanent",
+        "education": "B.Tech in Computer Science / IT / Statistics / Data Analytics (2024-2027)",
+        "eligibility": "B.Tech in CSE / IT with minimum 65% aggregate. Proven hands-on experience with Python, SQL, Power BI, Excel formulas, and statistical KPI visualization.",
+        "selection_process": "Round 1: AI Resume Matching & Portfolio Review → Round 2: AI Voice/Text Technical Interview on SQL queries, data wrangling, and KPI dashboarding → Round 3: Live Dashboard Case Study → Round 4: Final HR Offer",
+        "responsibilities": "Build and maintain automated data extraction pipelines using Python and SQL. Design interactive, user-friendly Power BI and Excel dashboards tracking SaaS KPIs and user retention. Conduct statistical A/B tests and deliver executive-ready analytical reports."
+    },
+
+    # 22. Data Engineering & Pipelines - TAILORED FOR RESUME 1
+    {
+        "name": "Rohan Verma",
+        "email": "rohan.dataeng@aihire.com",
+        "branch": "Computer Science & Engineering",
+        "field": "Data Pipelines, Wrangling & ETL",
+        "job_title": "Junior Data Engineer - Pipelines & Feature Engineering (Fresher)",
+        "department": "Big Data Platforms & ETL Systems",
+        "description": "Design and build end-to-end Python/SQL data pipelines. Clean, wrangle, and engineer features from raw unstructured datasets. Deploy structured data workflows and connect clean pipelines to FastAPI microservices.",
+        "required_skills": ["Python", "SQL", "Data Pipelines", "Pandas", "NumPy", "Feature Engineering"],
+        "preferred_skills": ["Data Cleaning", "Data Wrangling", "FastAPI", "Flask", "Git", "GitHub", "Predictive Modeling"],
+        "experience": "Fresher (0-1 years)",
+        "experience_level": "Fresher",
+        "salary_range": "₹7.0 - ₹10.5 LPA",
+        "location": "Bengaluru, Karnataka",
+        "work_mode": "Hybrid (3 Days Office / 2 Days Remote)",
+        "openings": 6,
+        "employment_type": "Full-Time, Permanent",
+        "education": "B.Tech in Computer Science / Data Engineering / Information Technology",
+        "eligibility": "B.Tech in CSE with strong foundation in Python, SQL query optimization, Pandas/NumPy data transformations, and feature pipeline construction.",
+        "selection_process": "Round 1: AI Resume Matcher → Round 2: AI Autonomous Technical Interview on ETL architecture, Pandas vectorization, and data modeling → Round 3: Live SQL & Data Pipeline Challenge → Round 4: Engineering Leadership Interview",
+        "responsibilities": "Construct automated ETL pipelines in Python and SQL for heterogeneous data ingestion. Perform feature normalization, outlier imputation, and categorical encoding. Optimize relational schemas and interface with backend APIs."
+    },
+
+    # 23. Machine Learning Engineer - TAILORED FOR RESUMES 1 & 2
+    {
+        "name": "Dr. Neha Malhotra",
+        "email": "neha.ml@aihire.com",
+        "branch": "Computer Science & Engineering",
+        "field": "Applied Machine Learning & Predictive Modeling",
+        "job_title": "Machine Learning Engineer - Predictive Modeling & ML Systems",
+        "department": "Applied AI & Machine Learning Research",
+        "description": "Train, evaluate, and deploy supervised and unsupervised machine learning models on real-world datasets. Specializing in feature engineering, Scikit-learn pipelines, cross-validation benchmarking, and deploying predictive models via Flask/FastAPI.",
+        "required_skills": ["Python", "Machine Learning", "Scikit-learn", "Pandas", "NumPy", "Feature Engineering"],
+        "preferred_skills": ["Predictive Modeling", "TensorFlow", "FastAPI", "SQL", "Model Evaluation", "Cross-Validation"],
+        "experience": "Fresher (0-1 years)",
+        "experience_level": "Fresher",
+        "salary_range": "₹8.0 - ₹12.0 LPA",
+        "location": "Bangalore / Hyderabad / Pune",
+        "work_mode": "Hybrid",
+        "openings": 10,
+        "employment_type": "Full-Time, Permanent",
+        "education": "B.Tech / M.Tech in CSE / Artificial Intelligence / Data Science",
+        "eligibility": "B.Tech in CSE with hands-on project experience in training ML classification/regression pipelines (e.g. Scikit-learn, Pandas) and deploying inference APIs.",
+        "selection_process": "Round 1: AI Resume Parsing & Model Project Verification → Round 2: AI Technical Interview on ML algorithms, bias-variance trade-offs, and metric evaluation (ROC-AUC, F1-score) → Round 3: Live ML Coding Round → Round 4: Managerial Round",
+        "responsibilities": "Lead data preprocessing, exploratory data analysis, and feature selection on tabular and text datasets. Train and fine-tune machine learning models achieving high precision and recall. Deploy trained models as RESTful prediction microservices using FastAPI/Flask."
+    },
+
+    # 24. Generative AI & NLP - TAILORED FOR RESUME 2
+    {
+        "name": "Dr. Arvind Swaminathan",
+        "email": "arvind.genai@aihire.com",
+        "branch": "Computer Science & Engineering",
+        "field": "Large Language Models, NLP & Semantic Search",
+        "job_title": "Junior GenAI & NLP Engineer (LLMs, Embeddings & RAG)",
+        "department": "Generative AI Systems & Cognitive Engineering",
+        "description": "Build next-generation NLP and Generative AI systems. Engineer NLP pipelines that convert unstructured text into structured representations, implement hybrid matching combining TF-IDF and dense vector embeddings, and interface with LLM prompt evaluation workflows.",
+        "required_skills": ["Python", "LLMs", "Embeddings", "NLP", "Semantic Matching", "FastAPI"],
+        "preferred_skills": ["TF-IDF", "NLP Pipelines", "PyTorch", "Scikit-learn", "Prompt Engineering", "Git"],
+        "experience": "Fresher to Junior (0-2 years)",
+        "experience_level": "Fresher / Junior",
+        "salary_range": "₹9.0 - ₹14.5 LPA",
+        "location": "Bengaluru / Remote",
+        "work_mode": "Remote / Hybrid",
+        "openings": 5,
+        "employment_type": "Full-Time, Permanent",
+        "education": "B.Tech / M.Tech in Computer Science / AI & Machine Learning",
+        "eligibility": "Strong algorithmic foundations, proven practical projects with LLMs, text embeddings, TF-IDF semantic vector space, and FastAPI microservice integration.",
+        "selection_process": "Round 1: AI Resume Screening → Round 2: AI Autonomous Technical Interview on embeddings, semantic distance metrics, NLP pipelines, and LLM evaluation → Round 3: System Design & NLP Architecture Round → Round 4: Founder Interview",
+        "responsibilities": "Architect end-to-end NLP pipelines converting unstructured text and resumes into structured JSON attributes. Build semantic matching engines using cosine similarity over embeddings and TF-IDF. Deploy scalable RESTful LLM inference endpoints in FastAPI."
+    },
+
+    # 25. Computer Vision & Deep Learning - TAILORED FOR RESUMES 1 & 2
+    {
+        "name": "Er. Priya Sundaram",
+        "email": "priya.cv@aihire.com",
+        "branch": "Computer Science & Engineering",
+        "field": "Computer Vision & Deep Neural Networks",
+        "job_title": "Computer Vision & Deep Learning Engineer (CNNs & PyTorch)",
+        "department": "Vision Intelligence & Multimodal Deep Learning",
+        "description": "Develop and train deep convolutional neural networks (CNNs) for image preprocessing, normalization, disease classification, and real-time visual recognition. Deploy vision models into web applications using Flask and FastAPI.",
+        "required_skills": ["Python", "CNNs", "Computer Vision", "TensorFlow", "PyTorch", "Flask"],
+        "preferred_skills": ["Deep Learning", "Image Preprocessing", "OpenCV", "FastAPI", "Transfer Learning"],
+        "experience": "Fresher (0-1 years)",
+        "experience_level": "Fresher",
+        "salary_range": "₹7.5 - ₹11.5 LPA",
+        "location": "Hyderabad / Bengaluru",
+        "work_mode": "Hybrid (On-Site Vision Lab & Remote)",
+        "openings": 4,
+        "employment_type": "Full-Time, Permanent",
+        "education": "B.Tech / M.Tech in CSE / Electrical & Computer Engineering / Artificial Intelligence",
+        "eligibility": "B.Tech in CSE with demonstrated project experience in training convolutional neural networks (e.g. on image datasets such as PlantVillage or ImageNet) with high validation accuracy.",
+        "selection_process": "Round 1: AI Portfolio & Resume Evaluation → Round 2: AI Voice/Text Technical Interview on CNN architectures, convolutions, pooling, data augmentation, and loss functions → Round 3: Computer Vision Coding Challenge → Round 4: Final Interview",
+        "responsibilities": "Implement image data preprocessing, normalization, and augmentation pipelines in TensorFlow/PyTorch. Train, fine-tune, and evaluate deep CNN architectures achieving 95%+ classification accuracy. Serve real-time image upload predictions through lightweight Flask/FastAPI web backends."
+    },
+
+    # 26. Python Backend & Data API Development - TAILORED FOR RESUMES 1 & 2
+    {
+        "name": "Er. Siddharth Nair",
+        "email": "siddharth.backend@aihire.com",
+        "branch": "Computer Science & Engineering",
+        "field": "Data-Driven Web APIs & Microservices",
+        "job_title": "Python Backend & Data API Developer (FastAPI / Flask)",
+        "department": "Platform Engineering & API Services",
+        "description": "Build, test, and deploy production-grade backend APIs and data-driven microservices using FastAPI and Flask. Design clean database schemas, implement secure authentication, and expose robust endpoints for ML pipelines and client dashboards.",
+        "required_skills": ["Python", "FastAPI", "Flask", "SQL", "REST APIs", "Git"],
+        "preferred_skills": ["GitHub", "PostgreSQL", "Pandas", "Data Pipelines", "Docker"],
+        "experience": "Fresher (0-1 years)",
+        "experience_level": "Fresher",
+        "salary_range": "₹6.5 - ₹10.0 LPA",
+        "location": "Noida / Gurugram / Bengaluru",
+        "work_mode": "Hybrid / Remote",
+        "openings": 12,
+        "employment_type": "Full-Time, Permanent",
+        "education": "B.Tech / B.E. / MCA in Computer Science / Information Technology",
+        "eligibility": "B.Tech CSE with solid command of Python syntax, object-oriented design, async FastAPI request lifecycles, and relational database queries.",
+        "selection_process": "Round 1: AI Resume Matching → Round 2: AI Interview on REST architecture, asynchronous event handling, and SQL query modeling → Round 3: Hands-on API Implementation Challenge → Round 4: Team Culture Fit & Offer",
+        "responsibilities": "Design and maintain high-performance asynchronous REST APIs in FastAPI. Integrate backend endpoints with machine learning models and data extraction pipelines. Write clean, testable code with Git version control and automated Swagger/OpenAPI documentation."
     }
 ]
 
 def seed_database(db: Session, force: bool = False):
-    # Check if database has already been seeded with the 20 recruiters
-    existing_count = db.query(User).filter(User.role == "recruiter").count()
-    if existing_count >= 20 and not force:
-        return
-
-    print("Seeding AIHire with 20 Recruiters across diverse branches & fields (0 candidate accounts)...")
-
-    # Clear existing users, jobs, candidates, interviews, reports to guarantee clean state
-    db.query(EvaluationReport).delete()
-    db.query(CandidateResponse).delete()
-    db.query(Question).delete()
-    db.query(Interview).delete()
-    db.query(Job).delete()
-    db.query(Candidate).delete()
-    db.query(User).delete()
-    db.commit()
+    print("Verifying AIHire recruiters and job requisitions across all engineering domains and specialized roles...")
 
     # Compute bcrypt hash once to avoid blocking CPU / timing out on startup
     default_pwd_hash = hash_password("password123")
 
-    # Seed 20 Recruiters and their respective Open Positions
+    # Seed Recruiters and their respective Open Positions idempotently without wiping candidate data
+    new_jobs_added = 0
     for r_info in RECRUITER_DATA:
-        recruiter = User(
-            name=r_info["name"],
-            email=r_info["email"],
-            password_hash=default_pwd_hash,
-            role="recruiter"
-        )
-        db.add(recruiter)
-        db.commit()
-        db.refresh(recruiter)
+        recruiter = db.query(User).filter(User.email == r_info["email"]).first()
+        if not recruiter:
+            recruiter = User(
+                name=r_info["name"],
+                email=r_info["email"],
+                password_hash=default_pwd_hash,
+                role="recruiter"
+            )
+            db.add(recruiter)
+            db.commit()
+            db.refresh(recruiter)
 
-        # Create job requisition for this recruiter
-        job = Job(
-            recruiter_id=recruiter.id,
-            title=r_info["job_title"],
-            department=f"{r_info['department']} ({r_info['field']})",
-            description=r_info["description"],
-            required_skills=json.dumps(r_info["required_skills"]),
-            preferred_skills=json.dumps(r_info.get("preferred_skills", [])),
-            experience=r_info["experience"],
-            education=r_info.get("education", f"B.Tech in {r_info['branch']} or related specialization"),
-            responsibilities=r_info.get("responsibilities", ""),
-            location=r_info.get("location", "Bengaluru / Hybrid"),
-            work_mode=r_info.get("work_mode", "Hybrid"),
-            salary_range=r_info.get("salary_range", "Competitive CTC"),
-            openings=r_info.get("openings", 3),
-            employment_type=r_info.get("employment_type", "Full-Time"),
-            experience_level=r_info.get("experience_level", "Fresher"),
-            eligibility=r_info.get("eligibility", ""),
-            selection_process=r_info.get("selection_process", ""),
-            scoring_weights=json.dumps({
-                "technical": 0.40,
-                "problem_solving": 0.20,
-                "communication": 0.15,
-                "role_relevance": 0.15,
-                "behavioral": 0.10
-            }),
-            is_active=True
-        )
-        db.add(job)
-        db.commit()
+        # Create or update job requisition for this recruiter
+        job = db.query(Job).filter(Job.recruiter_id == recruiter.id, Job.title == r_info["job_title"]).first()
+        if not job:
+            job = Job(
+                recruiter_id=recruiter.id,
+                title=r_info["job_title"],
+                department=f"{r_info['department']} ({r_info['field']})",
+                description=r_info["description"],
+                required_skills=json.dumps(r_info["required_skills"]),
+                preferred_skills=json.dumps(r_info.get("preferred_skills", [])),
+                experience=r_info["experience"],
+                education=r_info.get("education", f"B.Tech in {r_info['branch']} or related specialization"),
+                responsibilities=r_info.get("responsibilities", ""),
+                location=r_info.get("location", "Bengaluru / Hybrid"),
+                work_mode=r_info.get("work_mode", "Hybrid"),
+                salary_range=r_info.get("salary_range", "Competitive CTC"),
+                openings=r_info.get("openings", 3),
+                employment_type=r_info.get("employment_type", "Full-Time"),
+                experience_level=r_info.get("experience_level", "Fresher"),
+                eligibility=r_info.get("eligibility", ""),
+                selection_process=r_info.get("selection_process", ""),
+                scoring_weights=json.dumps({
+                    "technical": 0.40,
+                    "problem_solving": 0.20,
+                    "communication": 0.15,
+                    "role_relevance": 0.15,
+                    "behavioral": 0.10
+                }),
+                is_active=True
+            )
+            db.add(job)
+            db.commit()
+            new_jobs_added += 1
 
-    print(f"Successfully seeded {len(RECRUITER_DATA)} Recruiters across 20 distinct engineering branches with 0 candidate accounts.")
+    total_jobs = db.query(Job).count()
+    print(f"Database verified: {total_jobs} total active job requisitions (added {new_jobs_added} new roles). Candidate accounts preserved.")
+
