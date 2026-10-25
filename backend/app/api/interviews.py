@@ -1,6 +1,8 @@
 import json
+import csv
+import io
 import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
@@ -11,7 +13,15 @@ from app.models.interview import Interview
 from app.models.question import Question
 from app.models.response import CandidateResponse
 from app.models.report import EvaluationReport
-from app.schemas.interview import InterviewCreate, InterviewOut, AnswerSubmit, DynamicQuestionResponse, QuestionOut
+from app.schemas.interview import (
+    InterviewCreate, 
+    InterviewOut, 
+    AnswerSubmit, 
+    DynamicQuestionResponse, 
+    QuestionOut,
+    ProctoringEvent,
+    InterviewStatusUpdate
+)
 from app.services.question_generator import QuestionGenerator
 from app.services.answer_evaluator import AnswerEvaluator
 from app.services.candidate_matcher import CandidateMatcher
@@ -216,6 +226,11 @@ async def submit_answer(
         # Save Evaluation Report
         existing_report = db.query(EvaluationReport).filter(EvaluationReport.interview_id == interview.id).first()
         if not existing_report:
+            # Proctoring summary message
+            proc_msg = "Clean session - No integrity violations detected."
+            if (interview.tab_switch_count or 0) > 0 or (interview.paste_count or 0) > 0:
+                proc_msg = f"Observed {interview.tab_switch_count} tab switch(es) and {interview.paste_count} copy-paste attempt(s)."
+
             eval_report = EvaluationReport(
                 candidate_id=cand.id,
                 interview_id=interview.id,
@@ -233,7 +248,10 @@ async def submit_answer(
                 question_analysis=json.dumps(report_data["question_analysis"]),
                 summary=report_data["summary"],
                 recommendation=report_data["recommendation"],
-                decision_status="Pending"
+                decision_status=interview.recruiter_status or "Pending",
+                integrity_score=interview.integrity_score if interview.integrity_score is not None else 100.0,
+                tab_switches=interview.tab_switch_count or 0,
+                proctoring_summary=proc_msg
             )
             db.add(eval_report)
 
@@ -247,6 +265,137 @@ async def submit_answer(
             current_index=interview.current_question_index
         )
 
+@router.post("/{interview_id}/proctoring-event")
+def log_proctoring_event(
+    interview_id: int,
+    event: ProctoringEvent,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    flags = json.loads(interview.proctoring_flags or "[]")
+    timestamp_str = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    if event.event_type == "tab_switch":
+        interview.tab_switch_count = (interview.tab_switch_count or 0) + 1
+        flags.append(f"Tab switch / window unfocused at {timestamp_str}")
+    elif event.event_type == "paste_attempt":
+        interview.paste_count = (interview.paste_count or 0) + 1
+        flags.append(f"Copy-paste attempt blocked at {timestamp_str}")
+    else:
+        flags.append(f"{event.event_type} at {timestamp_str} ({event.details})")
+
+    # Compute updated integrity score: -8% per tab switch, -4% per paste attempt, min 0
+    calculated_score = max(0.0, 100.0 - (interview.tab_switch_count * 8.0) - (interview.paste_count * 4.0))
+    interview.integrity_score = round(calculated_score, 1)
+    interview.proctoring_flags = json.dumps(flags)
+
+    # Sync with report if already created
+    if interview.report:
+        interview.report.integrity_score = interview.integrity_score
+        interview.report.tab_switches = interview.tab_switch_count
+        interview.report.proctoring_summary = f"Recorded {interview.tab_switch_count} tab switch(es) and {interview.paste_count} paste attempt(s)."
+
+    db.commit()
+    return {
+        "status": "logged",
+        "integrity_score": interview.integrity_score,
+        "tab_switches": interview.tab_switch_count,
+        "paste_count": interview.paste_count
+    }
+
+@router.patch("/{interview_id}/status")
+def update_interview_recruiter_status(
+    interview_id: int,
+    status_update: InterviewStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    interview = db.query(Interview).filter(Interview.id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    new_status = status_update.recruiter_status or status_update.status or "Pending"
+    interview.recruiter_status = new_status
+    if interview.report:
+        interview.report.decision_status = new_status
+        if status_update.notes:
+            interview.report.recruiter_notes = status_update.notes
+
+    db.commit()
+    return {
+        "message": "Status updated successfully",
+        "status": interview.recruiter_status,
+        "recruiter_status": interview.recruiter_status
+    }
+
+@router.get("/job/{job_id}/export-csv")
+def export_job_candidates_csv(job_id: int, db: Session = Depends(get_db)):
+    """Export evaluated candidates for a job (or all jobs if job_id=0) as a structured CSV."""
+    if job_id == 0:
+        interviews = db.query(Interview).order_by(Interview.created_at.desc()).all()
+        filename = "AIHire_All_Applicants.csv"
+    else:
+        interviews = db.query(Interview).filter(Interview.job_id == job_id).order_by(Interview.created_at.desc()).all()
+        job = db.query(Job).filter(Job.id == job_id).first()
+        job_slug = job.title.replace(" ", "_") if job else f"Job_{job_id}"
+        filename = f"AIHire_Candidates_{job_slug}.csv"
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Interview ID",
+        "Candidate Name",
+        "Candidate Email",
+        "Job Title",
+        "Department",
+        "Overall Score",
+        "Skill Match Score",
+        "Technical Score",
+        "Problem Solving Score",
+        "Communication Score",
+        "Integrity Score (%)",
+        "Tab Switches",
+        "Recommendation",
+        "Recruiter Decision Status",
+        "Date Completed"
+    ])
+
+    for iv in interviews:
+        cand_user = db.query(User).join(Candidate, Candidate.user_id == User.id).filter(Candidate.id == iv.candidate_id).first()
+        cand_name = cand_user.name if cand_user else f"Candidate #{iv.candidate_id}"
+        cand_email = cand_user.email if cand_user else ""
+        job_obj = iv.job or db.query(Job).filter(Job.id == iv.job_id).first()
+        rep = iv.report
+
+        writer.writerow([
+            iv.id,
+            cand_name,
+            cand_email,
+            job_obj.title if job_obj else "Unknown Role",
+            job_obj.department if job_obj else "Engineering",
+            rep.overall_score if rep else (iv.overall_score or 0.0),
+            rep.skill_match_score if rep else 0.0,
+            rep.technical_score if rep else 0.0,
+            rep.problem_solving_score if rep else 0.0,
+            rep.communication_score if rep else 0.0,
+            iv.integrity_score if iv.integrity_score is not None else 100.0,
+            iv.tab_switch_count or 0,
+            rep.recommendation if rep else "Pending Evaluation",
+            iv.recruiter_status or (rep.decision_status if rep else "Pending"),
+            iv.created_at.strftime("%Y-%m-%d %H:%M") if iv.created_at else ""
+        ])
+
+    csv_data = output.getvalue()
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
 @router.get("/candidate/me", response_model=List[InterviewOut])
 def get_my_interviews(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     cand = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
@@ -256,8 +405,15 @@ def get_my_interviews(current_user: User = Depends(get_current_user), db: Sessio
     return [_format_interview_out(i, db) for i in interviews]
 
 @router.get("/job/{job_id}", response_model=List[InterviewOut])
-def get_interviews_for_job(job_id: int, db: Session = Depends(get_db)):
-    interviews = db.query(Interview).filter(Interview.job_id == job_id).order_by(Interview.created_at.desc()).all()
+def get_interviews_for_job(job_id: str, db: Session = Depends(get_db)):
+    if job_id in ["all", "0"]:
+        interviews = db.query(Interview).order_by(Interview.created_at.desc()).all()
+    else:
+        try:
+            jid = int(job_id)
+            interviews = db.query(Interview).filter(Interview.job_id == jid).order_by(Interview.created_at.desc()).all()
+        except ValueError:
+            interviews = db.query(Interview).order_by(Interview.created_at.desc()).all()
     return [_format_interview_out(i, db) for i in interviews]
 
 def _format_interview_out(interview: Interview, db: Session) -> InterviewOut:
@@ -278,5 +434,9 @@ def _format_interview_out(interview: Interview, db: Session) -> InterviewOut:
         created_at=interview.created_at,
         questions=[QuestionOut.model_validate(q) for q in questions],
         job_title=job.title if job else "",
-        candidate_name=cand_user.name if cand_user else "Candidate"
+        candidate_name=cand_user.name if cand_user else "Candidate",
+        tab_switch_count=interview.tab_switch_count or 0,
+        paste_count=interview.paste_count or 0,
+        integrity_score=interview.integrity_score if interview.integrity_score is not None else 100.0,
+        recruiter_status=interview.recruiter_status or "Pending"
     )

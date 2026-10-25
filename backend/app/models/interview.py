@@ -15,6 +15,16 @@ class Interview(Base):
     overall_score = Column(Float, default=0.0)
     start_time = Column(DateTime, nullable=True)
     end_time = Column(DateTime, nullable=True)
+    
+    # Proctoring & Integrity Tracking
+    tab_switch_count = Column(Integer, default=0)
+    paste_count = Column(Integer, default=0)
+    integrity_score = Column(Float, default=100.0) # 0 - 100%
+    proctoring_flags = Column(Text, default="[]")  # JSON string log of events
+    
+    # Recruiter Pipeline Decision
+    recruiter_status = Column(String(50), default="Pending") # Pending, Shortlisted, On-Hold, Rejected
+    
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships

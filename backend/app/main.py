@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from app.config import settings
 from app.database import engine, Base, SessionLocal
 from app.api import (
@@ -30,6 +31,25 @@ app = FastAPI(
 def on_startup():
     logger.info("Initializing database schema...")
     Base.metadata.create_all(bind=engine)
+    
+    # Auto-migrate new columns if existing SQLite DB already exists
+    with engine.connect() as conn:
+        for stmt in [
+            "ALTER TABLE interviews ADD COLUMN tab_switch_count INTEGER DEFAULT 0",
+            "ALTER TABLE interviews ADD COLUMN paste_count INTEGER DEFAULT 0",
+            "ALTER TABLE interviews ADD COLUMN integrity_score FLOAT DEFAULT 100.0",
+            "ALTER TABLE interviews ADD COLUMN proctoring_flags TEXT",
+            "ALTER TABLE interviews ADD COLUMN recruiter_status VARCHAR(50) DEFAULT 'Pending'",
+            "ALTER TABLE evaluation_reports ADD COLUMN integrity_score FLOAT DEFAULT 100.0",
+            "ALTER TABLE evaluation_reports ADD COLUMN tab_switches INTEGER DEFAULT 0",
+            "ALTER TABLE evaluation_reports ADD COLUMN proctoring_summary TEXT",
+        ]:
+            try:
+                conn.execute(text(stmt))
+                conn.commit()
+            except Exception:
+                pass
+
     try:
         with SessionLocal() as db:
             seed_database(db)

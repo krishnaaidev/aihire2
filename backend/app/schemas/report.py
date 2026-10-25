@@ -28,6 +28,12 @@ class ReportOut(BaseModel):
     recommendation: str
     recruiter_notes: Optional[str] = ""
     decision_status: str
+    
+    # Proctoring Assessment
+    integrity_score: Optional[float] = 100.0
+    tab_switches: Optional[int] = 0
+    proctoring_summary: Optional[str] = "Clean session - No integrity violations detected."
+    
     created_at: datetime
 
     class Config:

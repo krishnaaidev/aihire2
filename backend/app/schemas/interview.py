@@ -48,9 +48,22 @@ class InterviewOut(BaseModel):
     questions: Optional[List[QuestionOut]] = []
     job_title: Optional[str] = None
     candidate_name: Optional[str] = None
+    tab_switch_count: Optional[int] = 0
+    paste_count: Optional[int] = 0
+    integrity_score: Optional[float] = 100.0
+    recruiter_status: Optional[str] = "Pending"
 
     class Config:
         from_attributes = True
+
+class ProctoringEvent(BaseModel):
+    event_type: str # "tab_switch", "paste_attempt", "window_blur"
+    details: Optional[str] = ""
+
+class InterviewStatusUpdate(BaseModel):
+    status: Optional[str] = None # "Shortlisted", "On-Hold", "Rejected", "Pending"
+    recruiter_status: Optional[str] = None
+    notes: Optional[str] = ""
 
 class AnswerSubmit(BaseModel):
     interview_id: int

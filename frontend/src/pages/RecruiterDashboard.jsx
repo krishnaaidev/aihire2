@@ -14,16 +14,24 @@ import {
   SlidersHorizontal,
   ChevronRight,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Download,
+  ShieldCheck,
+  ShieldAlert,
+  Check,
+  X,
+  Clock
 } from 'lucide-react';
-import { jobsApi, candidatesApi, analyticsApi, reportsApi } from '../services/api';
+import { jobsApi, candidatesApi, analyticsApi, reportsApi, interviewsApi } from '../services/api';
 
 export default function RecruiterDashboard() {
   const navigate = useNavigate();
   const [analytics, setAnalytics] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [candidates, setCandidates] = useState([]);
+  const [interviews, setInterviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exportingCsv, setExportingCsv] = useState(false);
 
   // Filters
   const [selectedJobId, setSelectedJobId] = useState('all');
@@ -35,23 +43,48 @@ export default function RecruiterDashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [selectedJobId]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [analyticsData, jobsData, candidatesData] = await Promise.all([
+      const [analyticsData, jobsData, candidatesData, interviewsData] = await Promise.all([
         analyticsApi.getRecruiterAnalytics().catch(() => null),
         jobsApi.getJobs().catch(() => []),
         candidatesApi.listCandidates().catch(() => []),
+        interviewsApi.getJobInterviews(selectedJobId !== 'all' ? selectedJobId : 'all').catch(() => []),
       ]);
       setAnalytics(analyticsData);
       setJobs(jobsData);
       setCandidates(candidatesData);
+      setInterviews(interviewsData);
     } catch (err) {
       console.error('Error fetching recruiter dashboard:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    setExportingCsv(true);
+    try {
+      await interviewsApi.downloadExportCsv(selectedJobId);
+    } catch (err) {
+      alert('Failed to export candidates CSV: ' + err.message);
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
+  const handleUpdateStatus = async (interviewId, newStatus) => {
+    try {
+      setInterviews((prev) =>
+        prev.map((iv) => (iv.id === interviewId ? { ...iv, recruiter_status: newStatus } : iv))
+      );
+      await interviewsApi.updateStatus(interviewId, newStatus);
+    } catch (err) {
+      alert('Failed to update decision: ' + err.message);
+      fetchDashboardData();
     }
   };
 
@@ -176,15 +209,37 @@ export default function RecruiterDashboard() {
       <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl overflow-hidden backdrop-blur-sm">
         
         {/* Table Controls */}
-        <div className="p-5 border-b border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="p-5 border-b border-slate-700/60 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h2 className="text-base font-bold text-white">Evaluated Candidates & Applicants</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-white">Applicant Evaluation Pipeline</h2>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">
+                {interviews.length > 0 ? `${interviews.length} Applicants` : `${candidates.length} Registered`}
+              </span>
+            </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Select candidates using checkboxes to compare them side-by-side
+              Review AI scores, proctoring trust indices, update decisions, or export structured CSV reports.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Status Tabs */}
+            <div className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-700/80 text-xs">
+              {['all', 'Pending', 'Shortlisted', 'On-Hold', 'Rejected'].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                    statusFilter === status
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {status === 'all' ? 'All' : status}
+                </button>
+              ))}
+            </div>
+
             {/* Search */}
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -192,8 +247,8 @@ export default function RecruiterDashboard() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search candidates or skills..."
-                className="bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-52"
+                placeholder="Search candidates or jobs..."
+                className="bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-44"
               />
             </div>
 
@@ -201,13 +256,24 @@ export default function RecruiterDashboard() {
             <select
               value={selectedJobId}
               onChange={(e) => setSelectedJobId(e.target.value)}
-              className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+              className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500 max-w-[180px] truncate"
             >
-              <option value="all">All Job Positions</option>
+              <option value="all">All 20 Requisitions</option>
               {jobs.map((j) => (
                 <option key={j.id} value={j.id}>{j.title}</option>
               ))}
             </select>
+
+            {/* Export Candidates to CSV */}
+            <button
+              onClick={handleExportCsv}
+              disabled={exportingCsv}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition-all disabled:opacity-50"
+              title="Download structured candidate pipeline spreadsheet"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {exportingCsv ? 'Exporting...' : 'Export CSV'}
+            </button>
 
             {/* Compare Button */}
             <button
@@ -227,26 +293,131 @@ export default function RecruiterDashboard() {
             <thead className="bg-slate-900/60 border-b border-slate-700/60 text-slate-400 uppercase font-semibold">
               <tr>
                 <th className="py-3 px-4 w-10">Select</th>
-                <th className="py-3 px-4">Candidate</th>
-                <th className="py-3 px-4">Extracted Skills</th>
-                <th className="py-3 px-4">Overall Score</th>
-                <th className="py-3 px-4">Recommendation</th>
-                <th className="py-3 px-4">Decision</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3 px-4">Candidate & Applied Role</th>
+                <th className="py-3 px-4">Merit Score</th>
+                <th className="py-3 px-4">AI Proctoring Trust</th>
+                <th className="py-3 px-4">Decision Pipeline</th>
+                <th className="py-3 px-4">Fast Actions</th>
+                <th className="py-3 px-4 text-right">Evaluation Dossier</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/40">
-              {candidates.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
-                    <Users className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-slate-300">No candidate accounts registered yet</p>
-                    <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                      Candidates can register freely, upload their resumes, and take autonomous AI interviews for any of the 20 engineering requisitions.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
+              {interviews.length > 0 ? (
+                interviews
+                  .filter((iv) => {
+                    const q = searchQuery.toLowerCase();
+                    const matchesSearch =
+                      !searchQuery ||
+                      (iv.candidate_name && iv.candidate_name.toLowerCase().includes(q)) ||
+                      (iv.job_title && iv.job_title.toLowerCase().includes(q));
+                    const currentStatus = iv.recruiter_status || 'Pending';
+                    const matchesStatus =
+                      statusFilter === 'all' || currentStatus.toLowerCase() === statusFilter.toLowerCase();
+                    return matchesSearch && matchesStatus;
+                  })
+                  .map((iv) => (
+                    <tr key={iv.id} className="hover:bg-slate-700/20 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedCandidateIds.includes(iv.candidate_id)}
+                          onChange={() => toggleCandidateSelect(iv.candidate_id)}
+                          className="w-4 h-4 rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-0 cursor-pointer"
+                        />
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-cyan-600/30 text-cyan-400 border border-cyan-500/30 flex items-center justify-center font-bold text-xs uppercase">
+                            {iv.candidate_name ? iv.candidate_name.slice(0, 2) : 'C'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-white">{iv.candidate_name || `Candidate #${iv.candidate_id}`}</p>
+                            <span className="text-[11px] text-cyan-300 font-medium">{iv.job_title || 'General Engineering'}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {iv.overall_score > 0 ? (
+                          <div className="flex items-baseline gap-1">
+                            <span className="font-extrabold text-sm text-cyan-400">{iv.overall_score}</span>
+                            <span className="text-[10px] text-slate-500">/100</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-amber-400 font-medium">In Progress</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {(iv.integrity_score ?? 100) >= 85 ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800">
+                            <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                            {iv.integrity_score ?? 100}% Clean
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-950/80 text-rose-300 border border-rose-800">
+                            <ShieldAlert className="w-3 h-3 text-rose-400" />
+                            {iv.integrity_score}% ({iv.tab_switch_count} switches)
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          iv.recruiter_status === 'Shortlisted' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
+                          iv.recruiter_status === 'On-Hold' ? 'bg-amber-950 text-amber-300 border border-amber-800' :
+                          iv.recruiter_status === 'Rejected' ? 'bg-rose-950 text-rose-300 border border-rose-800' :
+                          'bg-slate-800 text-slate-300 border border-slate-700'
+                        }`}>
+                          {iv.recruiter_status || 'Pending'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleUpdateStatus(iv.id, 'Shortlisted')}
+                            title="Shortlist Applicant"
+                            className={`p-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                              iv.recruiter_status === 'Shortlisted'
+                                ? 'bg-emerald-600 text-white border-emerald-500'
+                                : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-emerald-400 hover:border-emerald-600'
+                            }`}
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleUpdateStatus(iv.id, 'On-Hold')}
+                            title="Put On-Hold"
+                            className={`p-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                              iv.recruiter_status === 'On-Hold'
+                                ? 'bg-amber-600 text-white border-amber-500'
+                                : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-amber-400 hover:border-amber-600'
+                            }`}
+                          >
+                            <Clock className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleUpdateStatus(iv.id, 'Rejected')}
+                            title="Reject Applicant"
+                            className={`p-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                              iv.recruiter_status === 'Rejected'
+                                ? 'bg-rose-600 text-white border-rose-500'
+                                : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-600'
+                            }`}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <Link
+                          to={`/report/${iv.id}`}
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/80 transition-colors"
+                        >
+                          Dossier
+                          <ExternalLink className="w-3 h-3" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+              ) : candidates.length > 0 ? (
                 candidates.map((cand) => (
                   <tr key={cand.id} className="hover:bg-slate-700/20 transition-colors">
                     <td className="py-3.5 px-4">
@@ -268,33 +439,38 @@ export default function RecruiterDashboard() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 max-w-xs">
-                      <div className="flex flex-wrap gap-1">
-                        {(cand.extracted_skills || []).slice(0, 5).map((s, i) => (
-                          <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-300">
-                            {s}
-                          </span>
-                        ))}
-                      </div>
+                    <td className="py-3.5 px-4">
+                      <span className="text-xs text-slate-400">Profile Parsed</span>
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="font-extrabold text-sm text-cyan-400">Active</span>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800">
+                        <ShieldCheck className="w-3 h-3" /> 100% Clean
+                      </span>
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-800/80">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
                         In Pipeline
                       </span>
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="text-xs text-slate-300">Under Review</span>
+                      <span className="text-[11px] text-slate-400">Ready for interview</span>
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      <span className="text-xs text-cyan-400">Profile Active</span>
+                      <span className="text-xs text-cyan-400">Resume Parsed</span>
                     </td>
                   </tr>
                 ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <Users className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-slate-300">No applicant sessions recorded yet</p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                      Candidates can register freely, upload their resumes, and take autonomous AI interviews for any of the 20 engineering requisitions.
+                    </p>
+                  </td>
+                </tr>
               )}
-
             </tbody>
           </table>
         </div>

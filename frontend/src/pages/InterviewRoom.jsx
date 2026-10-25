@@ -43,6 +43,13 @@ export default function InterviewRoom() {
   const [isAiVoiceEnabled, setIsAiVoiceEnabled] = useState(true);
   const [isListening, setIsListening] = useState(false);
 
+  // Proctoring & Academic Integrity State
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [pasteCount, setPasteCount] = useState(0);
+  const [integrityScore, setIntegrityScore] = useState(100);
+  const [proctoringWarning, setProctoringWarning] = useState(null);
+  const lastEventTimeRef = useRef(0);
+
   // References
   const videoRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -61,10 +68,75 @@ export default function InterviewRoom() {
     };
   }, [interviewId]);
 
+  // AI Proctoring: Monitor Window Focus & Tab Switches
+  useEffect(() => {
+    if (completed || resumeMissingError) return;
+
+    let isTabHidden = false;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        isTabHidden = true;
+        handleMalpracticeEvent('tab_switch', 'Tab switched or window minimized');
+      }
+    };
+
+    const handleWindowBlur = () => {
+      if (!document.hidden && !isTabHidden) {
+        handleMalpracticeEvent('tab_switch', 'Focus moved away from interview window');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [interviewId, completed, resumeMissingError, tabSwitchCount, pasteCount]);
+
+  const handleMalpracticeEvent = async (type, details) => {
+    const now = Date.now();
+    if (now - lastEventTimeRef.current < 2000) return;
+    lastEventTimeRef.current = now;
+
+    if (type === 'tab_switch') {
+      setTabSwitchCount((prev) => {
+        const next = prev + 1;
+        const newScore = Math.max(0, 100 - (next * 8 + pasteCount * 4));
+        setIntegrityScore(newScore);
+        return next;
+      });
+      setProctoringWarning('⚠️ Proctoring Alert: Tab switch detected! AI proctoring tracks window focus to preserve academic integrity.');
+    } else if (type === 'paste_attempt') {
+      setPasteCount((prev) => {
+        const next = prev + 1;
+        const newScore = Math.max(0, 100 - (tabSwitchCount * 8 + next * 4));
+        setIntegrityScore(newScore);
+        return next;
+      });
+      setProctoringWarning('⚠️ Clipboard Restricted: Direct paste is disabled to ensure authentic responses. Please type or speak your answer.');
+    }
+
+    try {
+      await interviewsApi.logProctoringEvent(Number(interviewId), type, details);
+    } catch (e) {
+      console.warn('Proctoring log error:', e);
+    }
+
+    setTimeout(() => {
+      setProctoringWarning((cur) => (cur ? null : cur));
+    }, 4500);
+  };
+
   const fetchInterviewSession = async () => {
     try {
       const data = await interviewsApi.getInterview(interviewId);
       setInterview(data);
+      if (data.tab_switch_count !== undefined && data.tab_switch_count !== null) setTabSwitchCount(data.tab_switch_count);
+      if (data.paste_count !== undefined && data.paste_count !== null) setPasteCount(data.paste_count);
+      if (data.integrity_score !== undefined && data.integrity_score !== null) setIntegrityScore(data.integrity_score);
       if (data.questions && data.questions.length > 0) {
         setTotalQuestions(data.questions.length);
         const idx = data.current_question_index || 0;
@@ -278,8 +350,26 @@ export default function InterviewRoom() {
           </div>
         </div>
 
-        {/* Progress & Voice Toggle */}
-        <div className="flex items-center gap-3">
+        {/* Progress & Voice Toggle & Proctoring */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* AI Proctoring Trust Badge */}
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
+            integrityScore >= 85
+              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
+              : integrityScore >= 65
+              ? 'bg-amber-950/60 text-amber-300 border-amber-800'
+              : 'bg-rose-950/60 text-rose-300 border-rose-800 animate-pulse'
+          }`}>
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">AI Proctoring</span>
+            <span className="font-mono font-bold">{integrityScore}%</span>
+            {tabSwitchCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded bg-rose-900/60 text-rose-200 text-[10px]">
+                {tabSwitchCount} switch{tabSwitchCount > 1 ? 'es' : ''}
+              </span>
+            )}
+          </div>
+
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs">
             <span className="text-slate-400">Question:</span>
             <span className="font-extrabold text-cyan-400">
@@ -299,6 +389,22 @@ export default function InterviewRoom() {
           </button>
         </div>
       </div>
+
+      {/* Real-time Proctoring Alert */}
+      {proctoringWarning && (
+        <div className="bg-rose-950/90 border border-rose-600/80 rounded-2xl p-4 text-rose-200 text-xs font-semibold flex items-center justify-between shadow-xl shadow-rose-950/40 animate-bounce">
+          <div className="flex items-center gap-2.5">
+            <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
+            <span>{proctoringWarning}</span>
+          </div>
+          <button
+            onClick={() => setProctoringWarning(null)}
+            className="text-xs text-rose-300 hover:text-white px-2 py-1 rounded bg-rose-900/40"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {completed ? (
         /* Completion Screen */
@@ -477,6 +583,10 @@ export default function InterviewRoom() {
                   rows={8}
                   required
                   value={answerText}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    handleMalpracticeEvent('paste_attempt', 'Clipboard paste blocked on answer textarea');
+                  }}
                   onChange={(e) => {
                     setAnswerText(e.target.value);
                     preSpeechTextRef.current = e.target.value;
@@ -484,6 +594,17 @@ export default function InterviewRoom() {
                   placeholder="Provide your technical answer here. Explain architectural trade-offs, algorithms, or practical implementation steps. You can also use Voice Mode to speak naturally..."
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 leading-relaxed font-mono"
                 />
+              </div>
+
+              {/* Anti-Malpractice Disclaimer */}
+              <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                <span className="flex items-center gap-1.5 text-cyan-400/90 font-medium">
+                  <ShieldAlert className="w-3.5 h-3.5 text-cyan-400" />
+                  AI Proctoring Active: Tab navigation is tracked and clipboard paste is restricted.
+                </span>
+                <span className="font-mono text-slate-400">
+                  Trust: <span className={integrityScore >= 80 ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>{integrityScore}%</span>
+                </span>
               </div>
 
               {/* Evaluation Feedback Splash */}

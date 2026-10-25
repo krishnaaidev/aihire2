@@ -125,6 +125,33 @@ export const interviewsApi = {
     }),
   getMyInterviews: () => apiRequest('/interviews/candidate/me'),
   getJobInterviews: (jobId) => apiRequest(`/interviews/job/${jobId}`),
+  logProctoringEvent: (interviewId, eventType, details = '') =>
+    apiRequest(`/interviews/${interviewId}/proctoring-event`, {
+      method: 'POST',
+      body: JSON.stringify({ event_type: eventType, details }),
+    }),
+  updateStatus: (interviewId, recruiterStatus) =>
+    apiRequest(`/interviews/${interviewId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ recruiter_status: recruiterStatus }),
+    }),
+  getExportCsvUrl: (jobId = 'all') => `${API_BASE}/interviews/job/${jobId}/export-csv`,
+  downloadExportCsv: async (jobId = 'all') => {
+    const token = localStorage.getItem('aihire_token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/interviews/job/${jobId}/export-csv`, { headers });
+    if (!res.ok) throw new Error('Failed to download candidate CSV');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AIHire_Candidates_${jobId}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  },
 };
 
 // Reports & Comparison API

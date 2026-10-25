@@ -31,6 +31,11 @@ class EvaluationReport(Base):
     recruiter_notes = Column(Text, default="")
     decision_status = Column(String(50), default="Pending") # Pending, Shortlisted, Rejected, Offered
     
+    # Proctoring Assessment
+    integrity_score = Column(Float, default=100.0)
+    tab_switches = Column(Integer, default=0)
+    proctoring_summary = Column(Text, default="Clean session - No integrity violations detected.")
+    
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships

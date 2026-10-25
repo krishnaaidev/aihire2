@@ -16,7 +16,9 @@ import {
   TrendingUp,
   MessageSquare,
   ShieldCheck,
-  Save
+  Save,
+  GraduationCap,
+  Download
 } from 'lucide-react';
 
 export default function InterviewReportPage() {
@@ -122,11 +124,43 @@ export default function InterviewReportPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => window.print()}
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition-all"
+          >
+            <Download className="w-4 h-4" />
+            Download PDF Report & Certificate
+          </button>
+          <button
+            onClick={() => window.print()}
             className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-2 transition-colors"
           >
             <Printer className="w-4 h-4" />
-            Print / Export PDF
+            Print
           </button>
+        </div>
+      </div>
+
+      {/* Institutional & Academic Guidance Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-cyan-800/60 rounded-2xl p-5 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center shrink-0">
+            <GraduationCap className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-400 block">
+              Academic Project • B.Tech Computer Science & Engineering
+            </span>
+            <h2 className="text-sm sm:text-base font-extrabold text-white">
+              CT Institute of Engineering, Management and Technology
+            </h2>
+            <p className="text-xs text-slate-400">
+              Affiliated to I.K.G. Punjab Technical University • Under the guidance of <span className="text-slate-200 font-semibold">Er. Sukhdayal, Assistant Professor</span>
+            </p>
+          </div>
+        </div>
+        <div className="shrink-0 flex items-center gap-2">
+          <span className="px-3 py-1.5 rounded-xl bg-cyan-950/80 border border-cyan-800 text-[11px] font-bold text-cyan-300">
+            AIHire Engine v2.0
+          </span>
         </div>
       </div>
 
@@ -216,6 +250,57 @@ export default function InterviewReportPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* AI Proctoring & Academic Integrity Verification */}
+        <div className="bg-slate-900/80 border border-slate-700/70 rounded-xl p-5 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+              <h3 className="text-sm font-bold text-white">AI Proctoring & Session Integrity Verification</h3>
+            </div>
+            <div>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${
+                (report.integrity_score ?? 100) >= 85
+                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                  : (report.integrity_score ?? 100) >= 65
+                  ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                  : 'bg-rose-950 text-rose-300 border border-rose-800'
+              }`}>
+                {(report.integrity_score ?? 100) >= 85 ? 'Verified Clean Session' : 'Integrity Audit Flag'}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+            <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Integrity Trust Index</span>
+              <div className="flex items-baseline gap-1 my-1">
+                <span className={`text-2xl font-black ${getScoreColor(report.integrity_score ?? 100)}`}>
+                  {report.integrity_score ?? 100}%
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 block">Continuous focus & response authentication</span>
+            </div>
+
+            <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Monitored Tab Switches</span>
+              <div className="flex items-baseline gap-1 my-1">
+                <span className="text-2xl font-black text-white">
+                  {report.tab_switches || 0}
+                </span>
+                <span className="text-xs text-slate-500">instances</span>
+              </div>
+              <span className="text-[10px] text-slate-500 block">Window focus departures logged</span>
+            </div>
+
+            <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Proctoring Log Summary</span>
+              <p className="text-xs text-slate-300 font-medium mt-1 leading-snug">
+                {report.proctoring_summary || 'Clean session - No integrity violations detected.'}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -364,6 +449,54 @@ export default function InterviewReportPage() {
             </div>
           </div>
         )}
+
+        {/* Official Candidate Performance Certificate */}
+        <div className="bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 border-2 border-cyan-800/80 rounded-2xl p-6 sm:p-8 text-center relative overflow-hidden shadow-2xl print:border-slate-400 print:bg-white print:text-black">
+          <div className="max-w-2xl mx-auto space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 border border-cyan-700 text-cyan-300 text-xs font-bold uppercase tracking-wider">
+              <Award className="w-4 h-4 text-cyan-400" />
+              Official Candidate Performance Certificate
+            </div>
+
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide print:text-black">
+              CERTIFICATE OF TECHNICAL MERIT & EVALUATION
+            </h2>
+
+            <p className="text-xs text-slate-300 print:text-slate-700 leading-relaxed max-w-xl mx-auto">
+              This document certifies that <strong className="text-cyan-300 print:text-black">{report.candidate_name}</strong> has successfully completed an autonomous, multi-dimensional technical evaluation for the requisition of <strong className="text-white print:text-black">{report.job_title}</strong> with an overall composite merit score of <strong className="text-cyan-400 print:text-black">{report.overall_score}/100</strong>.
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-3 border-y border-slate-800 print:border-slate-300 text-left">
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase block">Candidate Email</span>
+                <span className="text-xs font-semibold text-slate-200 print:text-black truncate block">{report.candidate_email || 'Verified Candidate'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase block">Merit Recommendation</span>
+                <span className="text-xs font-bold text-cyan-400 print:text-black block">{report.recommendation}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase block">Integrity Trust Index</span>
+                <span className="text-xs font-bold text-emerald-400 print:text-black block">{report.integrity_score ?? 100}% Clean</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase block">Evaluation Date</span>
+                <span className="text-xs font-semibold text-slate-200 print:text-black block">{new Date(report.created_at).toLocaleDateString()}</span>
+              </div>
+            </div>
+
+            <div className="pt-4 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 print:text-slate-600 gap-4">
+              <div className="text-left">
+                <span className="block font-bold text-white print:text-black">AIHire Autonomous Evaluation System</span>
+                <span className="text-[11px] text-slate-500">Autonomous Adaptive Grading & Proctoring Engine</span>
+              </div>
+              <div className="text-right sm:text-right">
+                <span className="block font-bold text-white print:text-black">Er. Sukhdayal (Assistant Professor)</span>
+                <span className="text-[11px] text-slate-500">CT Institute of Engg, Mgmt & Tech • IKG PTU</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
       </div>
 

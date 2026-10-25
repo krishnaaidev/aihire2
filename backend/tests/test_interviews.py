@@ -67,6 +67,49 @@ def test_interview_requires_resume():
         data = response_with_resume.json()
         assert "id" in data
         assert data["job_id"] == job.id
+        interview_id = data["id"]
+
+        # 4. Test Proctoring Event Logging
+        proc_res = client.post(
+            f"/api/interviews/{interview_id}/proctoring-event",
+            json={"event_type": "tab_switch", "details": "Candidate switched tabs"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert proc_res.status_code == 200
+        proc_data = proc_res.json()
+        assert proc_data["tab_switches"] == 1
+        assert proc_data["integrity_score"] == 92.0 # 100 - 8
+
+        # Log paste attempt
+        proc_paste_res = client.post(
+            f"/api/interviews/{interview_id}/proctoring-event",
+            json={"event_type": "paste_attempt", "details": "Blocked clipboard paste"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert proc_paste_res.status_code == 200
+        assert proc_paste_res.json()["paste_count"] == 1
+        assert proc_paste_res.json()["integrity_score"] == 88.0 # 92 - 4
+
+        # 5. Test Recruiter Status Update
+        rec_user = db.query(User).filter(User.role == "recruiter").first()
+        rec_email = rec_user.email if rec_user else cand_user.email
+        rec_token = create_access_token({"sub": rec_email, "role": "recruiter"})
+        status_res = client.patch(
+            f"/api/interviews/{interview_id}/status",
+            json={"recruiter_status": "Shortlisted"},
+            headers={"Authorization": f"Bearer {rec_token}"}
+        )
+        assert status_res.status_code == 200
+        assert status_res.json()["recruiter_status"] == "Shortlisted"
+
+        # 6. Test CSV Export
+        csv_res = client.get(f"/api/interviews/job/{job.id}/export-csv")
+        assert csv_res.status_code == 200
+        assert "text/csv" in csv_res.headers["content-type"]
+        assert "AIHire_Candidates" in csv_res.headers["content-disposition"]
+        assert "Candidate Name" in csv_res.text
+        assert "Test Candidate" in csv_res.text
+        assert "Shortlisted" in csv_res.text
 
     finally:
         db.close()

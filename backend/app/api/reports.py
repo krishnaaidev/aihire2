@@ -126,5 +126,8 @@ def _format_report(report: EvaluationReport, db: Session) -> ReportOut:
         recommendation=report.recommendation or "Consider",
         recruiter_notes=report.recruiter_notes or "",
         decision_status=report.decision_status or "Pending",
+        integrity_score=report.integrity_score if report.integrity_score is not None else 100.0,
+        tab_switches=report.tab_switches or 0,
+        proctoring_summary=report.proctoring_summary or "Clean session - No integrity violations detected.",
         created_at=report.created_at
     )
