@@ -283,10 +283,10 @@ export default function CandidatePortal() {
       </div>
 
       {/* Main Tab Navigation */}
-      <div className="flex border-b border-slate-800 gap-2">
+      <div className="flex overflow-x-auto border-b border-slate-800 gap-2 pb-0.5 whitespace-nowrap">
         <button
           onClick={() => setActiveTab('jobs')}
-          className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-4 sm:px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-colors shrink-0 ${
             activeTab === 'jobs'
               ? 'border-cyan-400 text-cyan-400 bg-slate-800/30 rounded-t-xl'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -301,7 +301,7 @@ export default function CandidatePortal() {
 
         <button
           onClick={() => setActiveTab('profile')}
-          className={`flex items-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-4 sm:px-5 py-3 text-xs sm:text-sm font-bold border-b-2 transition-colors shrink-0 ${
             activeTab === 'profile'
               ? 'border-cyan-400 text-cyan-400 bg-slate-800/30 rounded-t-xl'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -345,7 +345,7 @@ export default function CandidatePortal() {
 
           {/* AI Skill Matching Intelligence Header (Visible when resume is uploaded) */}
           {hasResume && (
-            <div className="bg-gradient-to-r from-cyan-950/70 via-slate-900 to-indigo-950/50 border-2 border-cyan-500/40 rounded-2xl p-5 shadow-xl space-y-4">
+            <div className="bg-gradient-to-r from-cyan-950/70 via-slate-900 to-indigo-950/50 border-2 border-cyan-500/40 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[11px] font-bold uppercase tracking-wider">
@@ -363,7 +363,7 @@ export default function CandidatePortal() {
                 </div>
 
                 {/* Mode Switcher Pill */}
-                <div className="flex items-center gap-2 bg-slate-950/80 p-1.5 rounded-xl border border-slate-700/80 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 bg-slate-950/80 p-1.5 rounded-xl border border-slate-700/80">
                   <button
                     onClick={() => { setJobFilterMode('matched'); setSelectedSkillFilter(null); }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${

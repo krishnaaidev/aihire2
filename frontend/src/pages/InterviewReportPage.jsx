@@ -121,17 +121,17 @@ export default function InterviewReportPage() {
           {user?.role === 'recruiter' ? 'Back to Recruiter Dashboard' : 'Back to Candidate Portal'}
         </button>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <button
             onClick={() => window.print()}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition-all"
+            className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all"
           >
             <Download className="w-4 h-4" />
             Download PDF Report & Certificate
           </button>
           <button
             onClick={() => window.print()}
-            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-2 transition-colors"
+            className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center justify-center gap-2 transition-colors"
           >
             <Printer className="w-4 h-4" />
             Print

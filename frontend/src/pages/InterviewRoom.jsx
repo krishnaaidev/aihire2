@@ -44,7 +44,10 @@ export default function InterviewRoom() {
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(true);
   const [isAiVoiceEnabled, setIsAiVoiceEnabled] = useState(true);
+  const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [speechBlocked, setSpeechBlocked] = useState(false);
+  const utteranceRef = useRef(null);
 
   // Proctoring & Academic Integrity State
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
@@ -66,6 +69,41 @@ export default function InterviewRoom() {
   const recognitionRef = useRef(null);
   const preSpeechTextRef = useRef('');
 
+  // Pre-load Web Speech API voices
+  useEffect(() => {
+    const handleVoicesChanged = () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.getVoices();
+      }
+    };
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = handleVoicesChanged;
+    }
+
+    // Unlock browser audio context on first user interaction
+    const unlockAudio = () => {
+      if ('speechSynthesis' in window && window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+      setSpeechBlocked(false);
+    };
+
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('touchstart', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
+
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  }, []);
+
   useEffect(() => {
     fetchInterviewSession();
     setupWebcam();
@@ -75,7 +113,9 @@ export default function InterviewRoom() {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
-      window.speechSynthesis?.cancel();
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, [interviewId]);
 
@@ -303,19 +343,97 @@ export default function InterviewRoom() {
     }
   };
 
-  // Text-To-Speech for AI Interviewer Voice
+  // Text-To-Speech for AI Interviewer Voice (Cross-browser, anti-GC, autoplay resilient)
   const speakQuestion = (text) => {
-    if (!isAiVoiceEnabled || !('speechSynthesis' in window)) return;
+    if (!text || !('speechSynthesis' in window) || !isAiVoiceEnabled) return;
+
     if (recognitionRef.current && isListening) {
       recognitionRef.current.stop();
       setIsListening(false);
       setIsVoiceActive(false);
     }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    window.speechSynthesis.speak(utterance);
+
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+      window.speechSynthesis.cancel();
+
+      // Brief delay to let browser reset audio thread
+      setTimeout(() => {
+        try {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utteranceRef.current = utterance;
+          utterance.rate = 0.96;
+          utterance.pitch = 1.0;
+          utterance.lang = 'en-US';
+
+          // Select natural English voice if available
+          const voices = window.speechSynthesis.getVoices();
+          if (voices && voices.length > 0) {
+            const naturalVoice = voices.find(v => 
+              v.lang.startsWith('en') && (
+                v.name.includes('Natural') || 
+                v.name.includes('Google') || 
+                v.name.includes('Samantha') || 
+                v.name.includes('Daniel') || 
+                v.name.includes('Ava') || 
+                v.name.includes('Jenny') ||
+                v.name.includes('US')
+              )
+            ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+
+            if (naturalVoice) {
+              utterance.voice = naturalVoice;
+            }
+          }
+
+          utterance.onstart = () => {
+            setIsAiSpeaking(true);
+            setSpeechBlocked(false);
+          };
+
+          utterance.onend = () => {
+            setIsAiSpeaking(false);
+            utteranceRef.current = null;
+          };
+
+          utterance.onerror = (e) => {
+            console.warn('Speech synthesis event:', e);
+            setIsAiSpeaking(false);
+            utteranceRef.current = null;
+            if (e.error === 'not-allowed') {
+              setSpeechBlocked(true);
+            }
+          };
+
+          window.speechSynthesis.speak(utterance);
+
+          // Autoplay blockage check for Chromium
+          setTimeout(() => {
+            if (window.speechSynthesis.pending && !isAiSpeaking) {
+              setSpeechBlocked(true);
+            }
+          }, 500);
+
+        } catch (innerErr) {
+          console.warn('Utterance generation failed:', innerErr);
+          setIsAiSpeaking(false);
+        }
+      }, 50);
+
+    } catch (err) {
+      console.warn('Speech synthesis speak failure:', err);
+      setIsAiSpeaking(false);
+    }
+  };
+
+  const stopAiVoice = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setIsAiSpeaking(false);
+      utteranceRef.current = null;
+    }
   };
 
   // Speech Recognition (Web Speech API) - Fixed repetition bug
@@ -496,26 +614,26 @@ export default function InterviewRoom() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
       
       {/* Top Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-800/40 border border-slate-700/60 p-4 rounded-2xl backdrop-blur-md">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 bg-slate-800/40 border border-slate-700/60 p-3.5 sm:p-4 rounded-2xl backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center font-bold">
-            <Bot className="w-6 h-6" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center font-bold shrink-0">
+            <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <h1 className="text-base font-extrabold text-white">AI Autonomous Interview Room</h1>
-            <p className="text-xs text-slate-400">
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-base font-extrabold text-white truncate">AI Autonomous Interview Room</h1>
+            <p className="text-[11px] sm:text-xs text-slate-400 truncate">
               Role: <span className="text-cyan-300 font-medium">{interview?.job_title || 'Software Engineering'}</span>
             </p>
           </div>
         </div>
 
         {/* Progress & Voice Toggle & Proctoring */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Face Warning Counter Badge */}
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold ${
+          <div className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-[11px] sm:text-xs font-semibold ${
             faceWarningCount === 0 
               ? 'bg-slate-900 border-slate-700 text-slate-300'
               : faceWarningCount === 1
@@ -523,11 +641,11 @@ export default function InterviewRoom() {
               : 'bg-rose-950/80 border-rose-700 text-rose-300 animate-pulse'
           }`}>
             <Video className="w-3.5 h-3.5" />
-            <span>Face Warnings: <strong className={faceWarningCount > 0 ? 'text-rose-400' : 'text-emerald-400'}>{faceWarningCount}/3</strong></span>
+            <span>Face: <strong className={faceWarningCount > 0 ? 'text-rose-400' : 'text-emerald-400'}>{faceWarningCount}/3</strong></span>
           </div>
 
           {/* AI Proctoring Trust Badge */}
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
+          <div className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border text-[11px] sm:text-xs font-semibold transition-all ${
             integrityScore >= 85
               ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
               : integrityScore >= 65
@@ -535,43 +653,51 @@ export default function InterviewRoom() {
               : 'bg-rose-950/60 text-rose-300 border-rose-800 animate-pulse'
           }`}>
             <ShieldAlert className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">AI Proctoring</span>
+            <span className="hidden sm:inline">Proctoring</span>
             <span className="font-mono font-bold">{integrityScore}%</span>
             {tabSwitchCount > 0 && (
               <span className="px-1.5 py-0.2 rounded bg-rose-900/60 text-rose-200 text-[10px]">
-                {tabSwitchCount} switch{tabSwitchCount > 1 ? 'es' : ''}
+                {tabSwitchCount} sw
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs">
-            <span className="text-slate-400">Question:</span>
+          <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-[11px] sm:text-xs">
+            <span className="text-slate-400">Q:</span>
             <span className="font-extrabold text-cyan-400">
               {Math.min(currentIndex + 1, totalQuestions)} / {totalQuestions}
             </span>
           </div>
 
           <button
-            onClick={() => setIsAiVoiceEnabled(!isAiVoiceEnabled)}
+            onClick={() => {
+              if (isAiVoiceEnabled) {
+                stopAiVoice();
+                setIsAiVoiceEnabled(false);
+              } else {
+                setIsAiVoiceEnabled(true);
+                if (currentQuestion) speakQuestion(currentQuestion.question_text);
+              }
+            }}
             title={isAiVoiceEnabled ? "Mute AI Speech" : "Unmute AI Speech"}
             className={`p-2 rounded-xl border text-xs transition-colors flex items-center gap-1.5 ${
               isAiVoiceEnabled ? 'bg-cyan-950/60 text-cyan-300 border-cyan-800' : 'bg-slate-800 text-slate-400 border-slate-700'
             }`}
           >
-            {isAiVoiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            <span className="hidden sm:inline">AI Voice</span>
+            {isAiVoiceEnabled ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4 text-slate-400" />}
+            <span className="hidden sm:inline">{isAiVoiceEnabled ? 'Voice On' : 'Muted'}</span>
           </button>
         </div>
       </div>
 
       {/* Real-time Face Visibility Warning Banner */}
       {faceWarningMessage && (
-        <div className="bg-rose-950/95 border-2 border-rose-600 rounded-2xl p-4 text-rose-200 text-xs font-bold flex items-center justify-between shadow-2xl shadow-rose-950/50 animate-bounce">
-          <div className="flex items-center gap-3">
-            <ShieldAlert className="w-6 h-6 text-rose-400 shrink-0" />
+        <div className="bg-rose-950/95 border-2 border-rose-600 rounded-2xl p-3.5 sm:p-4 text-rose-200 text-xs font-bold flex items-center justify-between shadow-2xl shadow-rose-950/50 animate-bounce">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <ShieldAlert className="w-5 h-5 sm:w-6 sm:h-6 text-rose-400 shrink-0" />
             <span>{faceWarningMessage}</span>
           </div>
-          <span className="text-[11px] px-2.5 py-1 rounded-full bg-rose-900 border border-rose-500 text-white uppercase tracking-wider font-extrabold">
+          <span className="text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-1 rounded-full bg-rose-900 border border-rose-500 text-white uppercase tracking-wider font-extrabold shrink-0 ml-2">
             Warning {faceWarningCount}/3
           </span>
         </div>
@@ -579,14 +705,14 @@ export default function InterviewRoom() {
 
       {/* Real-time Proctoring Alert */}
       {proctoringWarning && (
-        <div className="bg-rose-950/90 border border-rose-600/80 rounded-2xl p-4 text-rose-200 text-xs font-semibold flex items-center justify-between shadow-xl shadow-rose-950/40 animate-bounce">
+        <div className="bg-rose-950/90 border border-rose-600/80 rounded-2xl p-3.5 sm:p-4 text-rose-200 text-xs font-semibold flex items-center justify-between shadow-xl shadow-rose-950/40 animate-bounce">
           <div className="flex items-center gap-2.5">
             <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
             <span>{proctoringWarning}</span>
           </div>
           <button
             onClick={() => setProctoringWarning(null)}
-            className="text-xs text-rose-300 hover:text-white px-2 py-1 rounded bg-rose-900/40"
+            className="text-xs text-rose-300 hover:text-white px-2 py-1 rounded bg-rose-900/40 ml-2 shrink-0"
           >
             Dismiss
           </button>
@@ -595,25 +721,25 @@ export default function InterviewRoom() {
 
       {completed ? (
         /* Completion Screen */
-        <div className="bg-slate-800/50 border border-emerald-800/80 rounded-2xl p-8 sm:p-12 text-center max-w-2xl mx-auto space-y-6 shadow-2xl animate-fadeIn">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
-            <CheckCircle className="w-10 h-10" />
+        <div className="bg-slate-800/50 border border-emerald-800/80 rounded-2xl p-6 sm:p-12 text-center max-w-2xl mx-auto space-y-5 sm:space-y-6 shadow-2xl animate-fadeIn">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
+            <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10" />
           </div>
 
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-800">
               Session Finished
             </span>
-            <h2 className="text-3xl font-black text-white mt-4">Interview Completed!</h2>
-            <p className="text-xs text-slate-300 mt-2 max-w-md mx-auto leading-relaxed">
+            <h2 className="text-2xl sm:text-3xl font-black text-white mt-3 sm:mt-4">Interview Completed!</h2>
+            <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-md mx-auto leading-relaxed">
               Your responses have been evaluated across technical accuracy, problem-solving, completeness, and reasoning. The AI evaluation report is ready.
             </p>
           </div>
 
-          <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+          <div className="pt-3 sm:pt-4 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
             <button
               onClick={() => navigate(`/report/${interviewId}`)}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-xs bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition-all"
+              className="w-full sm:w-auto px-6 sm:px-8 py-3 rounded-xl font-bold text-xs sm:text-sm bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 transition-all"
             >
               <Award className="w-4 h-4" />
               View Comprehensive Evaluation Report
@@ -621,7 +747,7 @@ export default function InterviewRoom() {
             </button>
             <button
               onClick={() => navigate('/candidate')}
-              className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-semibold text-xs text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors"
+              className="w-full sm:w-auto px-5 py-3 rounded-xl font-semibold text-xs sm:text-sm text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors"
             >
               Return to Portal
             </button>
@@ -629,47 +755,84 @@ export default function InterviewRoom() {
         </div>
       ) : (
         /* Active Interview Layout: 2 Columns */
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
           
           {/* Left Column: AI Interviewer Persona & Candidate Camera (5 cols) */}
           <div className="lg:col-span-5 space-y-4">
             
             {/* AI Interviewer Persona Box */}
-            <div className="bg-gradient-to-b from-slate-800/80 to-slate-900 border border-cyan-800/50 rounded-2xl p-5 backdrop-blur-md relative overflow-hidden">
-              <div className="flex items-center justify-between mb-4">
+            <div className={`bg-gradient-to-b from-slate-800/90 to-slate-900 border rounded-2xl p-4 sm:p-5 backdrop-blur-md relative overflow-hidden transition-all duration-300 ${
+              isAiSpeaking ? 'border-cyan-500 shadow-xl shadow-cyan-500/20' : 'border-cyan-800/40'
+            }`}>
+              <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                  <span className={`w-2.5 h-2.5 rounded-full ${isAiSpeaking ? 'bg-cyan-400 animate-ping' : 'bg-cyan-400'}`}></span>
                   <span className="text-xs font-bold text-slate-200">AI Senior Technical Interviewer</span>
                 </div>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">
-                  Adaptive Engine
+                <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors ${
+                  isAiSpeaking 
+                    ? 'bg-cyan-950 text-cyan-300 border-cyan-500 animate-pulse'
+                    : 'bg-slate-900 text-slate-400 border-slate-700'
+                }`}>
+                  {isAiSpeaking ? 'Speaking Aloud' : 'Adaptive AI'}
                 </span>
               </div>
 
               {/* Avatar Animation */}
-              <div className="flex flex-col items-center justify-center py-6">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-cyan-500/20 relative mb-4">
-                  <Bot className="w-10 h-10 animate-bounce" />
+              <div className="flex flex-col items-center justify-center py-4 sm:py-6">
+                <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xl transition-all mb-3 relative ${
+                  isAiSpeaking ? 'shadow-cyan-500/40 scale-105 ring-2 ring-cyan-400' : 'shadow-cyan-500/20'
+                }`}>
+                  <Bot className={`w-8 h-8 sm:w-10 sm:h-10 ${isAiSpeaking ? 'animate-pulse text-cyan-200' : ''}`} />
                   <div className="absolute -inset-1 rounded-2xl bg-cyan-500/20 blur-sm pointer-events-none"></div>
                 </div>
 
                 {/* Animated Soundwave */}
-                <div className="flex items-center gap-1.5 h-8">
-                  {[12, 24, 16, 28, 20, 14, 22].map((h, i) => (
+                <div className="flex items-center gap-1.5 h-7">
+                  {[10, 22, 14, 26, 18, 12, 20].map((h, i) => (
                     <div
                       key={i}
-                      style={{ height: `${h}px` }}
-                      className="w-1 bg-gradient-to-t from-cyan-500 to-blue-400 rounded-full animate-soundwave"
+                      style={{ 
+                        height: isAiSpeaking ? `${h}px` : '4px',
+                        transition: 'height 0.2s ease-in-out'
+                      }}
+                      className={`w-1 rounded-full ${
+                        isAiSpeaking 
+                          ? 'bg-gradient-to-t from-cyan-500 to-blue-400 animate-soundwave' 
+                          : 'bg-slate-700'
+                      }`}
                     ></div>
                   ))}
                 </div>
-                <span className="text-[11px] text-cyan-400/80 font-mono mt-2">Active AI Session</span>
+
+                {/* Action button inside persona box */}
+                <div className="mt-3">
+                  {isAiSpeaking ? (
+                    <button
+                      type="button"
+                      onClick={stopAiVoice}
+                      className="px-3 py-1 rounded-lg text-[11px] font-bold bg-rose-950/90 text-rose-300 border border-rose-700 flex items-center gap-1.5 shadow-md shadow-rose-950/40 hover:bg-rose-900 transition-all"
+                    >
+                      <VolumeX className="w-3.5 h-3.5" />
+                      Stop AI Voice
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => currentQuestion && speakQuestion(currentQuestion.question_text)}
+                      className="px-3 py-1 rounded-lg text-[11px] font-bold bg-cyan-950/90 text-cyan-300 border border-cyan-700 hover:border-cyan-400 hover:text-white flex items-center gap-1.5 shadow-md shadow-cyan-950/40 transition-all"
+                    >
+                      <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+                      Read Question Aloud
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Candidate Webcam Preview Box */}
-            <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-4 relative overflow-hidden">
-              <div className="flex items-center justify-between mb-3 text-xs">
+            <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-3.5 sm:p-4 relative overflow-hidden">
+              <div className="flex items-center justify-between mb-2 sm:mb-3 text-xs">
                 <span className="font-semibold text-slate-300">Candidate Video Stream</span>
                 <div className="flex items-center gap-2">
                   <button
@@ -681,7 +844,7 @@ export default function InterviewRoom() {
                 </div>
               </div>
 
-              <div className="aspect-video bg-slate-950 rounded-xl overflow-hidden relative flex items-center justify-center border border-slate-800">
+              <div className="aspect-video max-h-48 sm:max-h-60 lg:max-h-none bg-slate-950 rounded-xl overflow-hidden relative flex items-center justify-center border border-slate-800">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -697,7 +860,7 @@ export default function InterviewRoom() {
                 )}
 
                 {/* Face visibility status badge inside webcam */}
-                <div className={`absolute top-3 left-3 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border backdrop-blur-sm ${
+                <div className={`absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border backdrop-blur-sm ${
                   faceWarningCount === 0
                     ? 'bg-emerald-950/70 border-emerald-700 text-emerald-300'
                     : 'bg-rose-950/90 border-rose-600 text-rose-200 animate-pulse'
@@ -708,7 +871,7 @@ export default function InterviewRoom() {
                 
                 {/* Live speech indicator badge */}
                 {isListening && (
-                  <div className="absolute bottom-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-950/80 border border-rose-800 text-rose-300 text-[10px] font-bold animate-pulse">
+                  <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-950/80 border border-rose-800 text-rose-300 text-[10px] font-bold animate-pulse">
                     <Mic className="w-3 h-3" />
                     <span>Listening to speech...</span>
                   </div>
@@ -716,8 +879,8 @@ export default function InterviewRoom() {
               </div>
 
               <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-                <ShieldAlert className="w-3.5 h-3.5 text-slate-400" />
-                Facial/behavioral analysis is not used for sole decisions (Synopsis 17).
+                <ShieldAlert className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>Autonomous AI proctoring tracks window focus and camera visibility.</span>
               </p>
             </div>
 
@@ -727,8 +890,8 @@ export default function InterviewRoom() {
           <div className="lg:col-span-7 space-y-4">
             
             {/* Question Card */}
-            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-6 backdrop-blur-md shadow-xl">
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 sm:p-6 backdrop-blur-md shadow-xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800 uppercase">
                     {currentQuestion?.category || 'Technical'}
@@ -741,23 +904,55 @@ export default function InterviewRoom() {
                     {currentQuestion?.difficulty || 'Medium'}
                   </span>
                 </div>
-                <button
-                  onClick={() => currentQuestion && speakQuestion(currentQuestion.question_text)}
-                  className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
-                >
-                  <Volume2 className="w-3.5 h-3.5" /> Re-read
-                </button>
+
+                {/* AI Audio Read Aloud / Stop Button */}
+                {isAiSpeaking ? (
+                  <button
+                    type="button"
+                    onClick={stopAiVoice}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-950/90 text-rose-300 border border-rose-700 flex items-center gap-1.5 animate-pulse shadow-md shadow-rose-950/40 hover:bg-rose-900 transition-all"
+                  >
+                    <VolumeX className="w-3.5 h-3.5" />
+                    Stop Voice
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => currentQuestion && speakQuestion(currentQuestion.question_text)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-cyan-950 text-cyan-300 border border-cyan-700 hover:border-cyan-400 hover:text-white flex items-center gap-1.5 shadow-md shadow-cyan-950/40 transition-all"
+                  >
+                    <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+                    Listen to Question
+                  </button>
+                )}
               </div>
 
-              <h2 className="text-base sm:text-lg font-bold text-white leading-relaxed">
+              {/* Browser Autoplay Prompt if blocked */}
+              {speechBlocked && !isAiSpeaking && (
+                <div className="p-3 rounded-xl bg-cyan-950/80 border border-cyan-600/80 text-cyan-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 animate-fadeIn shadow-lg shadow-cyan-950/50">
+                  <div className="flex items-center gap-2">
+                    <Volume2 className="w-4 h-4 text-cyan-400 shrink-0" />
+                    <span>Click below to hear the AI Interviewer speak this question aloud:</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => currentQuestion && speakQuestion(currentQuestion.question_text)}
+                    className="px-3 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shrink-0 shadow"
+                  >
+                    Play Voice Now
+                  </button>
+                </div>
+              )}
+
+              <h2 className="text-sm sm:text-base md:text-lg font-bold text-white leading-relaxed">
                 {currentQuestion?.question_text || 'Loading next interview question...'}
               </h2>
             </div>
 
             {/* Answer Form Studio */}
-            <form onSubmit={handleSubmitAnswer} className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-6 backdrop-blur-sm space-y-4">
+            <form onSubmit={handleSubmitAnswer} className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-4 sm:p-6 backdrop-blur-sm space-y-4">
               
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-300">Your Response</span>
                   {isListening && (
@@ -768,7 +963,7 @@ export default function InterviewRoom() {
                   )}
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {answerText && (
                     <button
                       type="button"
@@ -776,7 +971,7 @@ export default function InterviewRoom() {
                         setAnswerText('');
                         preSpeechTextRef.current = '';
                       }}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-rose-400 hover:bg-slate-700/60 border border-slate-700 flex items-center gap-1 transition-colors"
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-rose-400 hover:bg-slate-700/60 border border-slate-700 flex items-center gap-1 transition-colors"
                       title="Clear transcript to re-record"
                     >
                       <RotateCcw className="w-3 h-3" />
@@ -819,7 +1014,7 @@ export default function InterviewRoom() {
 
               <div className="relative">
                 <textarea
-                  rows={8}
+                  rows={6}
                   required
                   value={answerText}
                   onPaste={(e) => {
@@ -831,14 +1026,14 @@ export default function InterviewRoom() {
                     preSpeechTextRef.current = e.target.value;
                   }}
                   placeholder="Provide your technical answer here. Explain architectural trade-offs, algorithms, or practical implementation steps. You can also use Voice Mode to speak naturally..."
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 leading-relaxed font-mono"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 sm:p-4 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 leading-relaxed font-mono"
                 />
               </div>
 
               {/* Anti-Malpractice Disclaimer */}
-              <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[10px] sm:text-[11px] text-slate-400 gap-1 px-1">
                 <span className="flex items-center gap-1.5 text-cyan-400/90 font-medium">
-                  <ShieldAlert className="w-3.5 h-3.5 text-cyan-400" />
+                  <ShieldAlert className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                   AI Proctoring Active: Tab navigation is tracked and clipboard paste is restricted.
                 </span>
                 <span className="font-mono text-slate-400">
@@ -848,7 +1043,7 @@ export default function InterviewRoom() {
 
               {/* Evaluation Feedback Splash */}
               {evaluationFeedback && (
-                <div className="p-4 rounded-xl bg-gradient-to-r from-cyan-950/90 to-blue-950/90 border border-cyan-700/80 animate-fadeIn">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-gradient-to-r from-cyan-950/90 to-blue-950/90 border border-cyan-700/80 animate-fadeIn">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4 text-cyan-400" />
@@ -860,7 +1055,7 @@ export default function InterviewRoom() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
                 <span className="text-[11px] text-slate-400">
                   {answerText.trim().split(/\s+/).filter(Boolean).length} words
                 </span>
@@ -868,7 +1063,7 @@ export default function InterviewRoom() {
                 <button
                   type="submit"
                   disabled={submitting || !answerText.trim()}
-                  className="px-6 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 disabled:opacity-40 flex items-center gap-2 transition-all"
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl text-xs sm:text-sm font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 disabled:opacity-40 flex items-center justify-center gap-2 transition-all"
                 >
                   <Send className="w-3.5 h-3.5" />
                   {submitting ? 'Analyzing Response with AI...' : 'Submit Answer & Next'}

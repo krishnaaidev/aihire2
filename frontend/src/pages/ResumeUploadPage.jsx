@@ -157,7 +157,7 @@ AIHire: Autonomous AI Interview & Intelligent Evaluation Platform
             <button
               type="submit"
               disabled={uploading || !file}
-              className="px-6 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 disabled:opacity-40 transition-colors"
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 disabled:opacity-40 transition-colors text-center"
             >
               {uploading ? 'Extracting with NLP...' : 'Upload & Parse Resume'}
             </button>

@@ -154,11 +154,11 @@ export default function JobDetailsPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
           <button
             onClick={handleCheckMatch}
             disabled={matchingLoading}
-            className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 flex items-center gap-1.5 transition-colors"
+            className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 flex items-center justify-center gap-1.5 transition-colors"
           >
             <Sparkles className="w-4 h-4 text-cyan-400" />
             {matchingLoading ? 'Analyzing...' : 'Check Skill Match'}
@@ -166,7 +166,7 @@ export default function JobDetailsPage() {
 
           <button
             onClick={() => handleStartInterview('text')}
-            className="px-6 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition-all"
+            className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all"
           >
             <Play className="w-4 h-4 fill-slate-950" />
             Start AI Interview Now
