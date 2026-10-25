@@ -11,6 +11,7 @@ import {
   Sparkles,
   ChevronRight,
   ShieldCheck,
+  Shield,
   Menu,
   X
 } from 'lucide-react';
@@ -125,6 +126,20 @@ export default function Navbar() {
                 </Link>
               </>
             )}
+
+            {user && user.role === 'admin' && (
+              <Link
+                to="/admin"
+                className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 ${
+                  isActive('/admin') || isActive('/admin-portal') || isActive('/admin/dashboard')
+                    ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                    : 'text-rose-400 hover:text-rose-300 hover:bg-rose-950/40'
+                }`}
+              >
+                <Shield className="w-4 h-4 text-rose-400" />
+                Admin Console
+              </Link>
+            )}
           </div>
 
           {/* Desktop User profile & actions */}
@@ -137,11 +152,17 @@ export default function Navbar() {
                   </div>
                   <div className="text-left">
                     <p className="text-xs font-semibold text-slate-200 leading-tight">{user.name}</p>
-                    <span className={`text-[10px] font-medium uppercase tracking-wider ${
-                      user.role === 'recruiter' ? 'text-purple-400' : 'text-cyan-400'
-                    }`}>
-                      {user.role}
-                    </span>
+                    {user.role === 'admin' ? (
+                      <Link to="/admin" title="Open Admin Console" className="text-[10px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 underline flex items-center gap-1">
+                        <Shield className="w-2.5 h-2.5" /> Super Admin
+                      </Link>
+                    ) : (
+                      <span className={`text-[10px] font-medium uppercase tracking-wider ${
+                        user.role === 'recruiter' ? 'text-purple-400' : 'text-cyan-400'
+                      }`}>
+                        {user.role}
+                      </span>
+                    )}
                   </div>
                   <button
                     onClick={handleLogout}
@@ -285,6 +306,20 @@ export default function Navbar() {
                   <span>Candidate Comparison</span>
                 </Link>
               </>
+            )}
+
+            {user && user.role === 'admin' && (
+              <Link
+                to="/admin"
+                className={`block px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2.5 ${
+                  isActive('/admin') || isActive('/admin-portal') || isActive('/admin/dashboard')
+                    ? 'bg-rose-950/80 text-rose-300 border border-rose-800'
+                    : 'text-rose-400 hover:bg-slate-800'
+                }`}
+              >
+                <Shield className="w-4 h-4 text-rose-400" />
+                <span>Super Admin Console</span>
+              </Link>
             )}
           </div>
 

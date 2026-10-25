@@ -107,17 +107,37 @@ export default function AdminDashboard() {
   };
 
   const handleAdminLogin = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setLoginLoading(true);
     setLoginError('');
     try {
-      const data = await authApi.login(loginEmail, loginPassword);
-      if (data.user.role !== 'admin') {
-        throw new Error('Access Denied: This account does not possess Super Admin clearance.');
+      const loggedUser = await login(loginEmail, loginPassword);
+      if (loggedUser.role !== 'admin') {
+        logout();
+        throw new Error(`Access Denied: Logged in as ${loggedUser.email} (${loggedUser.role}), but Super Admin clearance is required.`);
       }
-      login(data.user, data.access_token);
+      showNotification('Super Admin authorized successfully. Welcome, Suman Krishna!');
     } catch (err) {
       setLoginError(err.message || 'Invalid Super Admin credentials');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleQuickAdminLogin = async () => {
+    setLoginEmail('admin@aihire.com');
+    setLoginPassword('Admin@AIHire2026!');
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const loggedUser = await login('admin@aihire.com', 'Admin@AIHire2026!');
+      if (loggedUser.role !== 'admin') {
+        logout();
+        throw new Error('Access Denied: Account does not possess Super Admin clearance.');
+      }
+      showNotification('Super Admin authorized successfully!');
+    } catch (err) {
+      setLoginError(err.message || 'Auto-authorization failed');
     } finally {
       setLoginLoading(false);
     }
@@ -193,12 +213,46 @@ export default function AdminDashboard() {
             </p>
           </div>
 
+          {user && user.role !== 'admin' && (
+            <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3.5 text-[11px] text-slate-300 flex items-center justify-between gap-2">
+              <div>
+                <span className="text-slate-400 block text-[10px]">Current Active Session:</span>
+                <span className="font-semibold text-white">{user.email}</span>
+                <span className="ml-1 text-[10px] uppercase font-bold text-cyan-400">({user.role})</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => logout()}
+                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+              >
+                Log Out
+              </button>
+            </div>
+          )}
+
           {loginError && (
             <div className="bg-rose-950/50 border border-rose-800 rounded-xl p-3.5 flex items-start gap-3 text-xs text-rose-200">
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
               <span>{loginError}</span>
             </div>
           )}
+
+          <button
+            type="button"
+            onClick={handleQuickAdminLogin}
+            disabled={loginLoading}
+            className="w-full py-2.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-cyan-500/10"
+          >
+            <Sparkles className="w-4 h-4 text-cyan-400" />
+            1-Click Super Admin Access (Suman Krishna)
+          </button>
+
+          <div className="relative flex items-center justify-center">
+            <div className="border-t border-slate-800 w-full" />
+            <span className="bg-slate-900 px-3 text-[10px] text-slate-500 uppercase tracking-wider font-semibold absolute">
+              or enter credentials
+            </span>
+          </div>
 
           <form onSubmit={handleAdminLogin} className="space-y-4 text-xs">
             <div>

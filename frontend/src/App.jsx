@@ -97,7 +97,9 @@ export default function App() {
                 }
               />
 
-              {/* Secret Super Admin Console (Direct Link Only - Hidden from Website Navigation) */}
+              {/* Secret Super Admin Console (Direct Link Only - Hidden from Public Site) */}
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin-portal" element={<AdminDashboard />} />
               <Route path="/admin-console" element={<AdminDashboard />} />
               <Route path="/super-admin" element={<AdminDashboard />} />

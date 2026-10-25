@@ -23,6 +23,8 @@ export default function LoginPage() {
       const user = await login(email, password);
       if (from !== '/') {
         navigate(from);
+      } else if (user.role === 'admin') {
+        navigate('/admin');
       } else if (user.role === 'recruiter') {
         navigate('/recruiter');
       } else {
@@ -42,6 +44,8 @@ export default function LoginPage() {
       const user = await loginWithGoogle();
       if (from !== '/') {
         navigate(from);
+      } else if (user.role === 'admin') {
+        navigate('/admin');
       } else if (user.role === 'recruiter') {
         navigate('/recruiter');
       } else {
