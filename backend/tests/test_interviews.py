@@ -162,3 +162,115 @@ async def test_adaptive_question_generation_on_candidate_reply():
     q_lower = next_question["question_text"].lower()
     assert any(term in q_lower for term in ["redis", "caching", "docker", "kubernetes", "database", "latency", "ttl", "memory", "storage"])
 
+def test_complete_interview_flow_all_five_questions():
+    db = SessionLocal()
+    unique_email = f"test_cand_full_{uuid.uuid4().hex[:8]}@aihire.com"
+    try:
+        cand_user = User(
+            name="Full Flow Candidate",
+            email=unique_email,
+            password_hash=hash_password("password123"),
+            role="candidate"
+        )
+        db.add(cand_user)
+        db.commit()
+        db.refresh(cand_user)
+
+        candidate = Candidate(
+            user_id=cand_user.id,
+            resume_filename="ml_resume.pdf",
+            resume_text="Senior Machine Learning Engineer with 4 years experience in Python, PyTorch, Scikit-Learn, and Docker.",
+            extracted_skills=json.dumps(["Python", "PyTorch", "Scikit-Learn", "Machine Learning", "Docker"])
+        )
+        db.add(candidate)
+        job = db.query(Job).first()
+        db.commit()
+
+        token = create_access_token({"sub": cand_user.email, "role": "candidate"})
+
+        # Start interview
+        create_res = client.post(
+            "/api/interviews",
+            json={"job_id": job.id, "mode": "text"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert create_res.status_code == 200
+        int_data = create_res.json()
+        interview_id = int_data["id"]
+
+        # Get initial interview details
+        get_res = client.get(
+            f"/api/interviews/{interview_id}",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert get_res.status_code == 200
+        cur_interview = get_res.json()
+        assert len(cur_interview["questions"]) >= 1
+
+        # Submit answers sequentially for 5 questions
+        for q_num in range(1, 6):
+            # Fetch current question
+            interview_state = client.get(
+                f"/api/interviews/{interview_id}",
+                headers={"Authorization": f"Bearer {token}"}
+            ).json()
+
+            current_idx = interview_state["current_question_index"]
+            assert current_idx == q_num - 1
+            active_q = interview_state["questions"][current_idx]
+
+            ans_payload = {
+                "interview_id": interview_id,
+                "question_id": active_q["id"],
+                "answer": f"For {active_q['question_text']}, I prevent unnecessary re-renders using React.memo and useCallback, manage side-effects with dedicated hooks, and adhere strictly to WCAG guidelines by adding semantic aria-labels and keyboard navigation.",
+                "transcript": ""
+            }
+
+            ans_res = client.post(
+                f"/api/interviews/{interview_id}/answer",
+                json=ans_payload,
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            assert ans_res.status_code == 200, f"Failed on question {q_num}: {ans_res.text}"
+            res_json = ans_res.json()
+
+            if q_num < 5:
+                assert res_json["completed"] is False
+                assert res_json["next_question"] is not None
+                assert res_json["current_index"] == q_num
+            else:
+                # 5th question MUST complete the interview smoothly
+                assert res_json["completed"] is True
+                assert res_json["total_questions"] == 5
+                assert res_json["current_index"] == 5
+
+        # Verify interview status is now completed
+        final_state = client.get(
+            f"/api/interviews/{interview_id}",
+            headers={"Authorization": f"Bearer {token}"}
+        ).json()
+        assert final_state["status"] == "completed"
+
+        # Verify Report was generated and accessible
+        report_res = client.get(
+            f"/api/reports/interview/{interview_id}",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert report_res.status_code == 200
+        report_data = report_res.json()
+        assert report_data["overall_score"] > 0
+        assert report_data["recommendation"] in ["Strong Hire", "Hire", "Lean Hire", "Consider", "Do Not Hire"]
+
+        # Retry submitting on completed interview -> should gracefully return completed=True
+        retry_res = client.post(
+            f"/api/interviews/{interview_id}/answer",
+            json=ans_payload,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert retry_res.status_code == 200
+        assert retry_res.json()["completed"] is True
+
+    finally:
+        db.close()
+
+

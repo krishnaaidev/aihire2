@@ -183,12 +183,29 @@ async def submit_answer(
             detail="This interview was cancelled due to academic integrity violation. You are not allowed to answer or retake."
         )
 
+    MAX_QUESTIONS = 5
+
+    # If the interview has already been completed, gracefully return completed status
+    if interview.status == "completed":
+        return DynamicQuestionResponse(
+            completed=True,
+            current_response_evaluation=None,
+            next_question=None,
+            total_questions=MAX_QUESTIONS,
+            current_index=min(MAX_QUESTIONS, interview.current_question_index or MAX_QUESTIONS)
+        )
+
     question = db.query(Question).filter(Question.id == ans_in.question_id).first()
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
 
     # Evaluate answer with NLP / LLM evaluator
-    key_points = json.loads(question.expected_key_points or "[]")
+    key_points = []
+    try:
+        key_points = json.loads(question.expected_key_points or "[]")
+    except Exception:
+        key_points = []
+
     eval_result = await AnswerEvaluator.evaluate_answer(
         question_text=question.question_text,
         category=question.category,
@@ -196,31 +213,50 @@ async def submit_answer(
         candidate_answer=ans_in.answer
     )
 
-    # Save candidate response
-    cand_resp = CandidateResponse(
-        interview_id=interview.id,
-        question_id=question.id,
-        candidate_answer=ans_in.answer,
-        transcript=ans_in.transcript or ans_in.answer,
-        relevance_score=eval_result.get("relevance_score", 70.0),
-        accuracy_score=eval_result.get("accuracy_score", 70.0),
-        completeness_score=eval_result.get("completeness_score", 70.0),
-        reasoning_score=eval_result.get("reasoning_score", 70.0),
-        communication_score=eval_result.get("communication_score", 70.0),
-        confidence_score=eval_result.get("confidence_score", 70.0),
-        composite_score=eval_result.get("composite_score", 70.0),
-        feedback=eval_result.get("feedback", "Good answer."),
-        strengths_mentioned=json.dumps(eval_result.get("strengths", [])),
-        improvements=json.dumps(eval_result.get("improvements", []))
-    )
-    db.add(cand_resp)
+    # Save or update candidate response
+    existing_resp = db.query(CandidateResponse).filter(
+        CandidateResponse.interview_id == interview.id,
+        CandidateResponse.question_id == question.id
+    ).first()
 
-    # Increment current_question_index
-    interview.current_question_index += 1
+    if existing_resp:
+        existing_resp.candidate_answer = ans_in.answer
+        existing_resp.transcript = ans_in.transcript or ans_in.answer
+        existing_resp.relevance_score = eval_result.get("relevance_score", 70.0)
+        existing_resp.accuracy_score = eval_result.get("accuracy_score", 70.0)
+        existing_resp.completeness_score = eval_result.get("completeness_score", 70.0)
+        existing_resp.reasoning_score = eval_result.get("reasoning_score", 70.0)
+        existing_resp.communication_score = eval_result.get("communication_score", 70.0)
+        existing_resp.confidence_score = eval_result.get("confidence_score", 70.0)
+        existing_resp.composite_score = eval_result.get("composite_score", 70.0)
+        existing_resp.feedback = eval_result.get("feedback", "Good answer.")
+        existing_resp.strengths_mentioned = json.dumps(eval_result.get("strengths", []))
+        existing_resp.improvements = json.dumps(eval_result.get("improvements", []))
+    else:
+        cand_resp = CandidateResponse(
+            interview_id=interview.id,
+            question_id=question.id,
+            candidate_answer=ans_in.answer,
+            transcript=ans_in.transcript or ans_in.answer,
+            relevance_score=eval_result.get("relevance_score", 70.0),
+            accuracy_score=eval_result.get("accuracy_score", 70.0),
+            completeness_score=eval_result.get("completeness_score", 70.0),
+            reasoning_score=eval_result.get("reasoning_score", 70.0),
+            communication_score=eval_result.get("communication_score", 70.0),
+            confidence_score=eval_result.get("confidence_score", 70.0),
+            composite_score=eval_result.get("composite_score", 70.0),
+            feedback=eval_result.get("feedback", "Good answer."),
+            strengths_mentioned=json.dumps(eval_result.get("strengths", [])),
+            improvements=json.dumps(eval_result.get("improvements", []))
+        )
+        db.add(cand_resp)
+
     db.commit()
 
-    # Adaptive Next Question Generation (Max 5 Questions)
-    MAX_QUESTIONS = 5
+    # Track actual number of distinct answered questions
+    total_answered = db.query(CandidateResponse).filter(CandidateResponse.interview_id == interview.id).count()
+    interview.current_question_index = min(MAX_QUESTIONS, max(interview.current_question_index or 0, total_answered))
+    db.commit()
 
     if interview.current_question_index < MAX_QUESTIONS:
         # Check if next question was already pre-seeded
@@ -231,11 +267,11 @@ async def submit_answer(
             # Dynamically generate follow-up question based on candidate's answer and topic
             cand = interview.candidate
             job = interview.job
-            cand_skills = json.loads(cand.extracted_skills or "[]")
-            job_skills = json.loads(job.required_skills or "[]")
+            cand_skills = json.loads(cand.extracted_skills or "[]") if cand and cand.extracted_skills else []
+            job_skills = json.loads(job.required_skills or "[]") if job and job.required_skills else []
 
             next_q_data = await QuestionGenerator.generate_adaptive_question_on_topic(
-                job_title=job.title,
+                job_title=job.title if job else "Software Engineer",
                 required_skills=job_skills,
                 candidate_skills=cand_skills,
                 previous_question=question.question_text,
@@ -272,27 +308,27 @@ async def submit_answer(
         # Compute skill match score
         cand = interview.candidate
         job = interview.job
-        cand_skills = json.loads(cand.extracted_skills or "[]")
-        job_req_skills = json.loads(job.required_skills or "[]")
-        job_pref_skills = json.loads(job.preferred_skills or "[]")
+        cand_skills = json.loads(cand.extracted_skills or "[]") if cand and cand.extracted_skills else []
+        job_req_skills = json.loads(job.required_skills or "[]") if job and job.required_skills else []
+        job_pref_skills = json.loads(job.preferred_skills or "[]") if job and job.preferred_skills else []
 
         match_res = CandidateMatcher.match_candidate_to_job(
             candidate_skills=cand_skills,
-            candidate_resume_text=cand.resume_text or " ".join(cand_skills),
+            candidate_resume_text=(cand.resume_text if cand else "") or " ".join(cand_skills),
             job_required_skills=job_req_skills,
             job_preferred_skills=job_pref_skills,
-            job_description_text=f"{job.title} {job.description}"
+            job_description_text=f"{job.title} {job.description}" if job else ""
         )
 
         all_responses = db.query(CandidateResponse).filter(CandidateResponse.interview_id == interview.id).all()
-        custom_weights = json.loads(job.scoring_weights) if job.scoring_weights else None
+        custom_weights = json.loads(job.scoring_weights) if job and job.scoring_weights else None
 
-        cand_user = db.query(User).filter(User.id == cand.user_id).first()
+        cand_user = db.query(User).filter(User.id == cand.user_id).first() if cand else None
         cand_name = cand_user.name if cand_user else "Candidate"
 
         report_data = await ReportGenerator.generate_evaluation_report(
             candidate_name=cand_name,
-            job_title=job.title,
+            job_title=job.title if job else "Role",
             skill_match_score=match_res["match_score"],
             responses=all_responses,
             custom_weights=custom_weights
@@ -310,9 +346,9 @@ async def submit_answer(
                 proc_msg = f"Observed {interview.tab_switch_count} tab switch(es) and {interview.paste_count} copy-paste attempt(s)."
 
             eval_report = EvaluationReport(
-                candidate_id=cand.id,
+                candidate_id=cand.id if cand else 0,
                 interview_id=interview.id,
-                job_id=job.id,
+                job_id=job.id if job else 0,
                 skill_match_score=report_data["skill_match_score"],
                 interview_score=report_data["interview_score"],
                 overall_score=report_data["overall_score"],
@@ -332,6 +368,20 @@ async def submit_answer(
                 proctoring_summary=proc_msg
             )
             db.add(eval_report)
+        else:
+            existing_report.skill_match_score = report_data["skill_match_score"]
+            existing_report.interview_score = report_data["interview_score"]
+            existing_report.overall_score = report_data["overall_score"]
+            existing_report.technical_score = report_data["technical_score"]
+            existing_report.problem_solving_score = report_data["problem_solving_score"]
+            existing_report.communication_score = report_data["communication_score"]
+            existing_report.role_relevance_score = report_data["role_relevance_score"]
+            existing_report.behavioral_score = report_data["behavioral_score"]
+            existing_report.strengths = json.dumps(report_data["strengths"])
+            existing_report.weaknesses = json.dumps(report_data["weaknesses"])
+            existing_report.question_analysis = json.dumps(report_data["question_analysis"])
+            existing_report.summary = report_data["summary"]
+            existing_report.recommendation = report_data["recommendation"]
 
         db.commit()
 
@@ -339,7 +389,7 @@ async def submit_answer(
             completed=True,
             current_response_evaluation=eval_result,
             next_question=None,
-            total_questions=total_q,
+            total_questions=MAX_QUESTIONS,
             current_index=interview.current_question_index
         )
 
